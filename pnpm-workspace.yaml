@@ -1,0 +1,15 @@
+packages:
+  - 'packages/*'
+
+# Supply-chain soak window, in minutes (24 hours).
+#
+# pnpm will not adopt a package version published more recently than this.
+# A freshly published release is the highest-risk moment in a package's life
+# (compromised maintainer account, botched publish, compromised CI token). This
+# project produces cryptographic evidence, so it refuses same-day releases.
+#
+# 24h is deliberately the *floor*, not a strong control: a wider window (say 7
+# days) is safer in theory but rejects so many transitive dependencies that
+# installs break constantly, and a policy people routinely bypass protects
+# nothing. Raise this once the dependency tree is stable and pinned.
+minimumReleaseAge: 1440

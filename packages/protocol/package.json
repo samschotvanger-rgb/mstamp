@@ -1,0 +1,34 @@
+{
+  "name": "@notched/protocol",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "Shared Notched protocol: receipt types, RFC 8785 canonicalization, SHA-256 hashing, and redaction. Imported by the SDK, the CLI, and the backend so those three can never drift.",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@noble/hashes": "^2.4.0",
+    "canonicalize": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "json-canonicalize": "^3.0.1",
+    "json-freeze": "1.0.0"
+  }
+}

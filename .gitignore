@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Test output
+coverage/
+
+# Repo-local package manager state (see .npmrc)
+.pnpm-store/
+.pnpm-cache/
+.npm-cache/
+
+# Scratch space used while vendoring reference test data
+.vendor-tmp/
+
+# Secrets - never commit a signing key or API key
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.log
