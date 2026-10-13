@@ -4,7 +4,7 @@
   "private": true,
   "license": "MIT",
   "type": "module",
-  "description": "Shared Notched protocol: receipt types, RFC 8785 canonicalization, SHA-256 hashing, and redaction. Imported by the SDK, the CLI, and the backend so those three can never drift.",
+  "description": "Shared Notched protocol: receipt types, RFC 8785 canonicalization, SHA-256 hashing, redaction, response validation and the fail-open telemetry queue. Imported by the SDK, the CLI, and the backend so those three can never drift.",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -29,6 +29,7 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "json-canonicalize": "^3.0.1",
-    "json-freeze": "1.0.0"
+    "json-freeze": "1.0.0",
+    "zod": "4.6.6"
   }
 }

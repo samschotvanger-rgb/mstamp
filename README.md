@@ -16,8 +16,9 @@ return `200 OK` with broken, stale or empty data.
 
 ## Status
 
-**Week 1 of 6 complete.** Shared protocol package only; no backend, SDK or CLI
-code yet, by design.
+**Weeks 1 and 2a complete.** Shared protocol package only; no backend, SDK or CLI
+code yet, by design. Week 2a added `validate.ts` and `queue.ts`; interception,
+local storage, cloud transport and the `Telemetry` class are still to come.
 
 | Deliverable | State |
 | --- | --- |
@@ -30,6 +31,8 @@ code yet, by design.
 | Canonicalization conformance suite | done — official IETF vectors |
 | `scripts/test-canonicalization.ts` cross-path test | done |
 | Canonicalizer library decision record | done — [docs/canonicalization-decision.md](docs/canonicalization-decision.md) |
+| `validate.ts` — six built-in rules + schema integration | done |
+| `queue.ts` — fail-open queue and circuit breaker | done |
 
 ---
 
@@ -45,12 +48,16 @@ notched/
 │       │   ├── hash.ts              # SHA-256 ("sha256:<hex>")
 │       │   ├── redact.ts            # header / body / URL redaction
 │       │   ├── receipt.ts           # the exact bytes the backend signs
+│       │   ├── validate.ts          # six built-in rules + optional schema
+│       │   ├── queue.ts             # fail-open queue + circuit breaker
 │       │   └── index.ts
 │       └── test/
 │           ├── canonical.test.ts    # 55 tests: conformance + guard
 │           ├── hash.test.ts         # 12 tests: NIST vectors + crypto cross-check
 │           ├── redact.test.ts       # 19 tests
 │           ├── receipt.test.ts      # 16 tests
+│           ├── validate.test.ts     # 68 tests: every rule, pass/fail/missing
+│           ├── queue.test.ts        # 29 tests: drop policy, breaker, retry timing
 │           ├── bakeoff.test.ts      # 5 tests: the library decision
 │           └── vectors/rfc8785.ts   # vendored IETF conformance corpus
 ├── scripts/
@@ -102,7 +109,7 @@ pnpm --filter @notched/protocol run test:watch
 
 ## What is verified
 
-116 tests, all passing.
+213 tests, all passing.
 
 **Canonicalization is byte-exact RFC 8785.** Verified against the IETF reference
 project's own vectors, vendored in `test/vectors/rfc8785.ts`:
@@ -126,6 +133,76 @@ removal, emulating a third party with no access to `@notched/protocol`.
 **Redaction runs before hashing and never mutates caller data** — the SDK runs in
 process with a live application, so mutating a caller's object would corrupt the
 buyer's own data as a side effect of telemetry.
+
+---
+
+## Validation semantics
+
+Rules and an optional schema both run when both are supplied; **both must pass**
+for `validation.passed === true`.
+
+| Rule | Fails when |
+| --- | --- |
+| `non-empty` | body is `{}`, `[]`, `null`, `''`, or absent |
+| `has-field:path` | field at `path` is missing or `null` |
+| `min-length:path:N` | array at `path` has fewer than `N` items |
+| `freshness:path:24h` | ISO timestamp at `path` is older than the duration |
+| `numeric-range:path:min:max` | number at `path` is outside the inclusive range |
+| `no-duplicates:path` | array at `path` contains a repeated value |
+
+Paths are dot-separated and support array indices (`data.rows.0.id`); they cannot
+contain `:`, which separates a rule's arguments. An empty path means the root
+value. `no-duplicates` compares elements by RFC 8785 canonical form, so
+`{a:1,b:2}` and `{b:2,a:1}` count as duplicates while `1` and `'1'` do not.
+
+**`passed: null` means "not validated", not "passed".** With no rules and no
+schema, nothing was checked, so claiming a pass would be a false assertion of
+quality. Consumers of a pass rate must exclude nulls rather than counting them as
+successes.
+
+**Non-JSON bodies** are hashed and recorded as `passed: null` with rule
+`unvalidated:non-json`. Note the distinction: `''` is not JSON at all so nothing
+can run against it, whereas `'""'` parses to the empty string and `non-empty`
+legitimately fails it.
+
+**Malformed rule specs fail loudly.** A misspelled rule produces an error instead
+of silently no-op'ing, because a validation gap that reports success is worse than
+a visible failure.
+
+**Zod is supported but not required.** `SchemaLike` is structural (`safeParse`), so
+Zod v3/v4, Valibot, ArkType or a hand-rolled validator all work. Zod is a
+**devDependency** here, used only to prove real Zod integration in the tests;
+`@notched/protocol` carries no runtime dependency on it.
+
+---
+
+## Fail-open queue
+
+| Parameter | Value | Purpose |
+| --- | --- | --- |
+| `telemetryTimeoutMs` | 2000 | abandon a hanging send |
+| `maxQueueSize` | 1000 | bound memory |
+| `dropPolicy` | `oldest` | which event to lose when full |
+| `circuitBreakerThreshold` | 5 | consecutive failed flushes before opening |
+| `circuitBreakerCooldownMs` | 30000 | how long to stop trying |
+| `retryAttempts` | 1 | one retry per batch |
+| `retryDelayMs` | 500 | delay before that retry |
+
+`enqueue` is **synchronous**: it calls no I/O, awaits nothing and never throws.
+The tests prove it returns `undefined` rather than a promise, is not an `async`
+function, never touches the transport, and buffers 1000 items against a hanging
+transport in under 100 ms.
+
+Two deliberate choices worth knowing:
+
+- **A failed batch is dropped, not requeued.** Requeueing would convert a backend
+  outage into unbounded memory growth and endless retries of stale events. The
+  handoff's position is that if the backend is down, telemetry is lost.
+- **While the circuit is open, `enqueue` drops immediately** rather than buffering,
+  so a long outage cannot accumulate a stale backlog.
+
+`flush()` never rejects. A caller awaiting it is waiting for an attempt to finish,
+not for a result it must handle.
 
 ---
 
@@ -224,18 +301,28 @@ Deliberate V1 scope, recorded so they are not mistaken for oversights:
   `serverSignature` and `signedAt`. Use `isSignedReceipt()` rather than checking
   the fields directly; a signature without a signing time does not count as
   signed.
+- **`non-empty` treats a whitespace-only string as non-empty.** A literal reading
+  of the handoff, where `''` is the only empty string. A body of `'   '` is
+  arguably the silent failure this product exists to catch, so say the word if you
+  want `trim()` semantics; it is tested either way.
+- **Rule paths cannot contain `:` or an escaped dot.** A JSON key literally named
+  `a.b` is unreachable by path. Rare in practice, but it is a real limit.
+- **`validation.passed: null` is not a pass.** Anything consuming a scorecard must
+  exclude nulls; a naive `passed !== false` check would count unvalidated calls as
+  good.
 - **No crypto review yet.** The handoff makes an external review of the
   canonicalization and signing path a precondition for the first pilot. This
   decision record is written to hand to that reviewer.
 
 ---
 
-## Week 2 next
+## Week 2b next
 
-1. `validate.ts` — Zod schemas plus the built-in rule library
-2. `queue.ts` — fail-open async queue and circuit breaker
-3. `local-db.ts` — SQLite receipt writer
-4. `cloud.ts` — ingestion POST
-5. Wire into the `Telemetry` class
-6. Integration test: wrap a fake scraper returning `{"items": []}`, assert the
+1. `intercept.ts` — wrap `fetch`, capture raw response bytes, hash before parsing
+2. `local-db.ts` — SQLite receipt writer
+3. `cloud.ts` — ingestion POST, consuming `TelemetryQueue` as its transport
+4. Wire into the `Telemetry` class
+5. Integration test: wrap a fake scraper returning `{"items": []}`, assert the
    receipt records `validation.passed = false`
+6. Fail-open test: kill the backend mid-call, assert the primary fetch still
+   succeeds and the process exits cleanly
