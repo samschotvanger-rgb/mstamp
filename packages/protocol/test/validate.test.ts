@@ -29,7 +29,7 @@ const at = (rules: readonly string[]): { rules: readonly string[]; now: number }
 
 describe('non-empty', () => {
   it('passes for every non-empty JSON shape', () => {
-    for (const value of [{ a: 1 }, [1], 'x', 0, false, ' ']) {
+    for (const value of [{ a: 1 }, [1], 'x', 0, false, ' x ']) {
       expect(validate(value, at(['non-empty'])).passed, `value ${JSON.stringify(value)}`).toBe(true)
     }
   })
@@ -49,11 +49,16 @@ describe('non-empty', () => {
     expect(validate(undefined, at(['non-empty'])).passed).toBe(false)
   })
 
-  it('treats a whitespace-only string as non-empty, per the literal spec', () => {
-    // Documented as a deliberate literal reading. Flagged in the README: a
-    // whitespace-only body is arguably the silent failure this product exists to
-    // catch, so this may become `value.trim() === ''`.
-    expect(validate('   ', at(['non-empty'])).passed).toBe(true)
+  it('trims before deciding, so a whitespace-only body is empty', () => {
+    // Ruled 2026-10-13. A body of only whitespace is the silent failure this
+    // product exists to catch, so it must fail. Whitespace AROUND real content does
+    // not make a body empty, so that must still pass.
+    expect(validate('   ', at(['non-empty'])).passed).toBe(false)
+    expect(validate('\t\n  ', at(['non-empty'])).passed).toBe(false)
+    expect(validate(' x ', at(['non-empty'])).passed).toBe(true)
+
+    // The trimmed case reports why, rather than claiming the string was empty.
+    expect(validate('   ', at(['non-empty'])).errors[0]).toContain('whitespace-only')
   })
 })
 

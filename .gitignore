@@ -8,6 +8,9 @@ dist/
 # Test output
 coverage/
 
+# Scratch space for tests (temporary SQLite files and their WAL sidecars)
+.tmp/
+
 # Repo-local package manager state (see .npmrc)
 .pnpm-store/
 .pnpm-cache/

@@ -204,7 +204,7 @@ function dedupeKey(value: unknown): string {
 function describeEmptiness(value: unknown): string {
   if (value === undefined) return 'a missing body'
   if (value === null) return 'null'
-  if (typeof value === 'string') return 'an empty string'
+  if (typeof value === 'string') return value === '' ? 'an empty string' : 'a whitespace-only string'
   if (Array.isArray(value)) return 'an empty array'
   return 'an empty object'
 }
@@ -213,7 +213,10 @@ function ruleNonEmpty(body: unknown): string[] {
   const empty =
     body === null ||
     body === undefined ||
-    (typeof body === 'string' && body === '') ||
+    // Trimmed, so a body of only whitespace counts as empty. Ruled 2026-10-13: a
+    // whitespace-only response is exactly the silent failure this rule exists to
+    // catch. Surrounding whitespace around real content is not emptiness.
+    (typeof body === 'string' && body.trim() === '') ||
     (Array.isArray(body) && body.length === 0) ||
     (isRecord(body) && !Array.isArray(body) && Object.keys(body).length === 0)
 

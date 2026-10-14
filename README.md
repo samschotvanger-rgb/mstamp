@@ -16,9 +16,9 @@ return `200 OK` with broken, stale or empty data.
 
 ## Status
 
-**Weeks 1 and 2a complete.** Shared protocol package only; no backend, SDK or CLI
-code yet, by design. Week 2a added `validate.ts` and `queue.ts`; interception,
-local storage, cloud transport and the `Telemetry` class are still to come.
+**Weeks 1, 2a and 2b-i complete.** Shared protocol package only; no backend, SDK or
+CLI code yet, by design. 2b-i added `fetch` interception and local SQLite storage;
+the cloud transport and the `Telemetry` class are still to come.
 
 | Deliverable | State |
 | --- | --- |
@@ -33,6 +33,8 @@ local storage, cloud transport and the `Telemetry` class are still to come.
 | Canonicalizer library decision record | done — [docs/canonicalization-decision.md](docs/canonicalization-decision.md) |
 | `validate.ts` — six built-in rules + schema integration | done |
 | `queue.ts` — fail-open queue and circuit breaker | done |
+| `intercept.ts` — `fetch` wrapper, non-mutating and fail-open | done |
+| `local-db.ts` — SQLite receipt store (`node:sqlite`) | done |
 
 ---
 
@@ -50,6 +52,8 @@ notched/
 │       │   ├── receipt.ts           # the exact bytes the backend signs
 │       │   ├── validate.ts          # six built-in rules + optional schema
 │       │   ├── queue.ts             # fail-open queue + circuit breaker
+│       │   ├── intercept.ts         # non-mutating, fail-open fetch wrapper
+│       │   ├── local-db.ts          # SQLite receipt store (node:sqlite)
 │       │   └── index.ts
 │       └── test/
 │           ├── canonical.test.ts    # 55 tests: conformance + guard
@@ -58,6 +62,8 @@ notched/
 │           ├── receipt.test.ts      # 16 tests
 │           ├── validate.test.ts     # 68 tests: every rule, pass/fail/missing
 │           ├── queue.test.ts        # 29 tests: drop policy, breaker, retry timing
+│           ├── intercept.test.ts    # 26 tests: pass-through, hashes, fail-open
+│           ├── local-db.test.ts     # 25 tests: round-trip, concurrency, lifecycle
 │           ├── bakeoff.test.ts      # 5 tests: the library decision
 │           └── vectors/rfc8785.ts   # vendored IETF conformance corpus
 ├── scripts/
@@ -109,7 +115,7 @@ pnpm --filter @notched/protocol run test:watch
 
 ## What is verified
 
-213 tests, all passing.
+264 tests, all passing.
 
 **Canonicalization is byte-exact RFC 8785.** Verified against the IETF reference
 project's own vectors, vendored in `test/vectors/rfc8785.ts`:
@@ -301,28 +307,44 @@ Deliberate V1 scope, recorded so they are not mistaken for oversights:
   `serverSignature` and `signedAt`. Use `isSignedReceipt()` rather than checking
   the fields directly; a signature without a signing time does not count as
   signed.
-- **`non-empty` treats a whitespace-only string as non-empty.** A literal reading
-  of the handoff, where `''` is the only empty string. A body of `'   '` is
-  arguably the silent failure this product exists to catch, so say the word if you
-  want `trim()` semantics; it is tested either way.
+- **`non-empty` trims before checking.** Ruled 2026-10-13: a whitespace-only body
+  (`'   '`) fails, while `' x '` passes. Called out because it is a deliberate
+  departure from a literal reading of the handoff, not an oversight.
 - **Rule paths cannot contain `:` or an escaped dot.** A JSON key literally named
   `a.b` is unreachable by path. Rare in practice, but it is a real limit.
 - **`validation.passed: null` is not a pass.** Anything consuming a scorecard must
   exclude nulls; a naive `passed !== false` check would count unvalidated calls as
   good.
+- **Interception buffers the whole response body in memory**, because hashing the
+  raw bytes requires reading all of them. A very large response therefore costs
+  memory proportional to its size. Hashing the raw bytes and leaving the caller's
+  stream untouched are in tension; the tee from `Response.clone()` is the only way
+  to have both.
+- **Request bodies that cannot be read without side effects get
+  `requestBodyHash: null`.** A `FormData`, `Blob` or `ReadableStream` body is
+  neither consumed nor guessed at: consuming it would disturb the caller's request,
+  and inventing bytes would produce a receipt for a request that was never made.
+  `Receipt.requestHash` is a required `string`, so those requests cannot currently
+  produce a V1 receipt. JSON POSTs carried as strings are fully covered, and
+  `Request`-carried bodies are reached through a non-destructive clone.
+- **A non-JSON request or response body gets no preview, even in `full` mode.**
+  Structural redaction is impossible for it, and a raw preview could disclose a
+  credential verbatim. The hash is unaffected: it covers the raw bytes.
+- **A failed call is not captured.** If the underlying `fetch` rejects there is no
+  status or response to record, so nothing is written. Provider-downtime evidence
+  would need a schema change, since `statusCode` is required.
 - **No crypto review yet.** The handoff makes an external review of the
   canonicalization and signing path a precondition for the first pilot. This
   decision record is written to hand to that reviewer.
 
 ---
 
-## Week 2b next
+## Week 2b-ii next
 
-1. `intercept.ts` — wrap `fetch`, capture raw response bytes, hash before parsing
-2. `local-db.ts` — SQLite receipt writer
-3. `cloud.ts` — ingestion POST, consuming `TelemetryQueue` as its transport
-4. Wire into the `Telemetry` class
-5. Integration test: wrap a fake scraper returning `{"items": []}`, assert the
+1. `cloud.ts` — ingestion POST, consuming `TelemetryQueue` as its transport
+2. `telemetry.ts` — wire interception, redaction, hashing, validation, local storage
+   and the queue together into the `Telemetry` class
+3. Integration test: wrap a fake scraper returning `{"items": []}`, assert the
    receipt records `validation.passed = false`
-6. Fail-open test: kill the backend mid-call, assert the primary fetch still
+4. Fail-open test: kill the backend mid-call, assert the primary fetch still
    succeeds and the process exits cleanly
