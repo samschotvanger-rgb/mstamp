@@ -16,9 +16,9 @@ return `200 OK` with broken, stale or empty data.
 
 ## Status
 
-**Weeks 1–3a complete.** The SDK is feature-complete and the backend has its skeleton,
-schema and tenant isolation. Still absent by design: signing, ingest, `/v1/keys`,
-`/v1/receipts`, `/v1/verify` and the CLI.
+**Weeks 1–3b complete.** The SDK is feature-complete; the backend signs receipts, accepts
+ingest and publishes its keys. Still absent by design: `/v1/receipts`, `/v1/verify`,
+payload encryption, the purge job and the CLI.
 
 | Deliverable | State |
 | --- | --- |
@@ -42,6 +42,9 @@ schema and tenant isolation. Still absent by design: signing, ingest, `/v1/keys`
 | Backend: numbered SQL migrations + runner | done |
 | Backend: row-level tenant isolation (RLS) | done |
 | Backend: API key auth middleware | done |
+| Backend: Ed25519 receipt signing | done |
+| Backend: `POST /v1/ingest/batch` | done, idempotent on `receiptId` |
+| Backend: `GET /v1/keys` + `/v1/keys/current` | done, public, keys never deleted |
 
 ---
 
@@ -83,16 +86,22 @@ notched/
 ├── packages/backend/                # the Notched service
 │   ├── migrations/
 │   │   ├── 001_init.sql             # tenants, receipts, payloads, indexes
-│   │   └── 002_row_level_security.sql  # app role, RLS, tenant_isolation policy
+│   │   ├── 002_row_level_security.sql  # app role, RLS, tenant_isolation policy
+│   │   └── 003_signing_keys.sql     # published public keys (no DELETE grant)
 │   ├── src/
 │   │   ├── app.ts                   # createApp: route order is security-relevant
 │   │   ├── auth.ts                  # X-API-Key -> tenant, or 401
+│   │   ├── config.ts                # the "refuse to start" gate
 │   │   ├── env.ts                   # shared Hono env + Tenant type
+│   │   ├── serve.ts                 # deployable entry point
 │   │   ├── version.ts               # /v1/health version, read from package.json
+│   │   ├── crypto/sign.ts           # Ed25519 sign/verify, payload from protocol
 │   │   ├── db/client.ts             # withTenant: SET LOCAL, never SET
+│   │   ├── db/keys.ts               # key publication, conflict detection
 │   │   ├── db/migrate.ts            # numbered SQL runner, checksummed
-│   │   └── routes/{health,whoami}.ts
-│   └── test/                        # 35 tests against real Postgres in WASM
+│   │   ├── db/receipts.ts           # receipt insert/select
+│   │   └── routes/{health,whoami,keys,ingest}.ts
+│   └── test/                        # 105 tests against real Postgres in WASM
 ├── docs/
 │   ├── canonicalization-decision.md
 │   └── receipt-schema.md            # normative V1 field set + verification recipe
@@ -140,7 +149,7 @@ pnpm --filter @notched/protocol run test:watch
 
 ## What is verified
 
-372 tests, all passing.
+442 tests, all passing.
 
 **Canonicalization is byte-exact RFC 8785.** Verified against the IETF reference
 project's own vectors, vendored in `test/vectors/rfc8785.ts`:
@@ -374,6 +383,14 @@ SDK's draft is **not** byte-identical to the signed receipt. SDK and backend mus
 agree on every *observation* field; the signing-time key stamp is a deterministic,
 verifier-reproducible step on top.
 
+### 6. `latencyMs` added to `IngestEvent`
+
+Added 2026-10-15. The receipt requires a `latencyMs`, and the event schema did not carry
+one, so the backend had no way to reconstruct it — it would have had to invent a number or
+store zero, and latency is a scorecard input. The SDK already had the value; it now sends
+it. This changes the wire format, so an older SDK and a newer backend are mutually
+incompatible on ingest.
+
 ---
 
 ## Known limitations
@@ -493,13 +510,76 @@ parameterless calls to `exec()`.
 
 ---
 
-## Week 3b next
+## Backend: signing and ingest
 
-1. Ed25519 signing with `@noble/ed25519` — **server-side only**, never in the SDK
-2. `POST /v1/ingest/batch` — idempotent on `receiptId`, signing the canonical payload
-   from `@notched/protocol`, storing, and encrypting `full`-mode previews
-3. `GET /v1/keys` — publishes every public key ever used, and never deletes one
-4. Payload encryption (AES-256-GCM, per-tenant key via HKDF) and the 7-day purge job
+### The signing key
 
-Then 3c: `GET /v1/receipts/:id` and the public `GET /v1/receipts/:id/verify`.
-Then Week 4: the `notched` CLI and the standalone offline verifier.
+`NOTCHED_SIGNING_KEY` is base64 of the 32-byte Ed25519 seed; `NOTCHED_SIGNING_KEY_ID`
+defaults to `k_0001`. **The service refuses to start** when the key is missing, is not
+base64, or does not decode to exactly 32 bytes (`openssl rand -base64 32`). It refuses in
+development too: a dev server that boots without a key and then rejects every receipt
+teaches the wrong thing about how the service works.
+
+A key id already published under a *different* public key is also a hard stop. Overwriting
+would break verification for every receipt already signed under that id; leaving the old
+one in place would break every future receipt. Neither is recoverable, so the process
+refuses rather than guessing.
+
+The test fixture key lives in `test/helpers/keys.ts`, never in `src/`. A hard-coded seed in
+shipped code is a known private key, and the failure mode — deploying with the test key
+because it worked locally — is silent and catastrophic. Tests inject the key explicitly,
+so nothing in `src/` needs a "test mode".
+
+### What gets signed
+
+`canonicalizeReceiptForSigning` from `@notched/protocol` produces the payload: RFC 8785
+canonical JSON with `serverSignature` and `signedAt` **omitted entirely**, not set to null.
+The backend does not reimplement it — a signer and a verifier that disagree produce
+receipts that are valid and unverifiable. The signature covers the **UTF-8 bytes** of that
+string, emitted as base64 with an `ed25519:` prefix.
+
+### Ingest
+
+One transaction per event, so a single malformed event rejects only itself rather than
+losing a batch of 100. `accepted`/`rejected` count per event; a batch over 100 is a **413**
+with `{ error: "batch_too_large", max, received }`.
+
+**Idempotent on `receiptId`, first write wins.** A receipt is a signed artefact, so a
+re-send must not be able to change what was signed — a test resends the same id with
+different content and asserts the stored row is untouched.
+
+One deviation from a plain `{ accepted, rejected, receipts }`: if *nothing* could be stored
+and the cause was infrastructure rather than bad input, the response is **503**, not 200. A
+200 would tell the SDK's queue the batch succeeded, so it would never retry and the
+telemetry would be lost silently — the opposite of what the fail-open design is for.
+
+### Verifying a receipt
+
+`GET /v1/keys/current` and `GET /v1/keys` need no auth, deliberately: a verifier holds a
+receipt and a public key and nothing else, so requiring a credential to fetch the key would
+make offline verification impossible for exactly the third parties a receipt is meant to
+convince. `/v1/keys/current` is served from memory, so a database outage does not stop
+verification of a receipt you already hold.
+
+`verifyReceipt` returns `false` for every failure and never throws, including for a
+malformed signature: `@noble/ed25519` *throws* on a wrong-length signature rather than
+returning false, and a verifier that crashes on a corrupt receipt is a denial-of-service
+surface.
+
+The assertion worth the most: a receipt is signed, stored, **read back out of Postgres**,
+and verified against the published key. A column mapped to the wrong field, a `jsonb`
+reshaped on the way out, or a timestamp losing precision through `timestamptz` would all
+change the bytes the signature covers and fail that test. Timestamps are normalised to
+millisecond precision on the way in for exactly that reason.
+
+---
+
+## Week 3c next
+
+1. `GET /v1/receipts/:id` — tenant-scoped, never returns another tenant's data
+2. `GET /v1/receipts/:id/verify` — public; re-canonicalises and checks the signature
+3. Payload encryption: AES-256-GCM with a per-tenant key derived via HKDF
+4. The 7-day purge job
+
+Then Week 4: the `notched` CLI (`list`/`show`/`verify`/`scorecard`/`usage`) and the
+standalone offline verifier.

@@ -23,6 +23,12 @@ importers:
 
   packages/backend:
     dependencies:
+      '@hono/node-server':
+        specifier: 2.1.5
+        version: 2.1.5(hono@4.13.13)
+      '@noble/ed25519':
+        specifier: 3.2.0
+        version: 3.2.0
       '@notched/protocol':
         specifier: workspace:*
         version: link:../protocol
@@ -76,8 +82,17 @@ packages:
   '@electric-sql/pglite@0.5.9':
     resolution: {integrity: sha512-GoQTRMZ/o4J3sMW4mLDtDFGNOm1xy5oH+iHDALWll3uERY6OF4BSnL1t7FZH2Mlw+RPceDBlFJgSaecO73c4EA==}
 
+  '@hono/node-server@2.1.5':
+    resolution: {integrity: sha512-MgP/I06GdvsilDspMk/qmRzpk8LOUStP6jFAbSRi40W09DhoyUn+Mj7eyKICPqeYKybOjVFLVIAQzvu1bfIa7Q==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      hono: ^4 || ^5.0.0-0
+
   '@jridgewell/sourcemap-codec@1.6.0':
     resolution: {integrity: sha512-T7jf+5zgsZHwNJ4lvQ7/aezbyk0nNX+zJVWpmHA7VYsEx7a7qr5Rg5IbtJFqkgze5Y2sruq1RUY8Q837Od7iFw==}
+
+  '@noble/ed25519@3.2.0':
+    resolution: {integrity: sha512-criDgRlnUA09hchYrTy/JUWPIEap5rZxQe6wDWzRx51oWWpDRcUpuNzlgPxDJaOK6AsW9c0wKcj3rKRv6t+bPQ==}
 
   '@noble/hashes@2.4.0':
     resolution: {integrity: sha512-X5XaVWZIBCT7HHZGm5I7ZQXDwLG+bGXuSrMQAW+7Zvl87h1kmc1ZB1VSRJcpUfoUrGQp4Fkoxm5kZ+Ms+aW+eA==}
@@ -584,7 +599,13 @@ snapshots:
 
   '@electric-sql/pglite@0.5.9': {}
 
+  '@hono/node-server@2.1.5(hono@4.13.13)':
+    dependencies:
+      hono: 4.13.13
+
   '@jridgewell/sourcemap-codec@1.6.0': {}
+
+  '@noble/ed25519@3.2.0': {}
 
   '@noble/hashes@2.4.0': {}
 

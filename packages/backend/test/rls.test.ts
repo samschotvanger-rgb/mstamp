@@ -17,6 +17,7 @@ import { createApp } from '../src/app.js'
 import { API_KEY_HEADER } from '../src/auth.js'
 import { currentTenantSetting, queryRows, withConnection, withTenant } from '../src/db/client.js'
 import { createTestDb, seedReceipt, seedTenant, type TestDb } from './helpers/pg.js'
+import { testSigningKey } from './helpers/keys.js'
 
 const KEY_A = 'sk_test_rls_tenant_a'
 const KEY_B = 'sk_test_rls_tenant_b'
@@ -47,7 +48,7 @@ describe('row-level tenant isolation', () => {
     await seedReceipt(db, { id: 'rcpt_a2', tenantId: 'tnt_a' })
     await seedReceipt(db, { id: 'rcpt_b1', tenantId: 'tnt_b' })
 
-    app = createApp({ db: db.pool, version: 'test', onError: () => {} })
+    app = createApp({ db: db.pool, signer: await testSigningKey(), version: 'test', onError: () => {} })
     ready = true
   })
 

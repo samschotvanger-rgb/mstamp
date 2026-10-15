@@ -158,6 +158,14 @@ export type IngestEvent = {
   receiptId: string
   /** ISO 8601 UTC. */
   timestamp: string
+  /**
+   * Wall-clock duration of the observed call, in milliseconds.
+   *
+   * Added after the V1 handoff was written. The receipt requires a `latencyMs`, and the
+   * event schema did not carry one, so the backend had no way to reconstruct it - it
+   * would have had to invent a number or store zero, and latency is a scorecard input.
+   */
+  latencyMs: number
   request: {
     method: string
     url: string

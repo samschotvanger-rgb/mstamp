@@ -45,7 +45,7 @@ describe('migrate', () => {
     try {
       const result = await migrate(db.pool)
 
-      expect(result.applied).toEqual(['001_init.sql', '002_row_level_security.sql'])
+      expect(result.applied).toEqual(['001_init.sql', '002_row_level_security.sql', '003_signing_keys.sql'])
       expect(result.alreadyApplied).toEqual([])
 
       const connection = await db.connect()
@@ -54,7 +54,7 @@ describe('migrate', () => {
         `SELECT version, checksum FROM ${MIGRATIONS_TABLE} ORDER BY version`,
       )
 
-      expect(recorded.map((row) => row.version)).toEqual(['001_init.sql', '002_row_level_security.sql'])
+      expect(recorded.map((row) => row.version)).toEqual(['001_init.sql', '002_row_level_security.sql', '003_signing_keys.sql'])
       for (const row of recorded) {
         expect(row.checksum).toMatch(/^sha256:[0-9a-f]{64}$/)
       }
@@ -70,7 +70,7 @@ describe('migrate', () => {
       const second = await migrate(db.pool)
 
       expect(second.applied).toEqual([])
-      expect(second.alreadyApplied).toEqual(['001_init.sql', '002_row_level_security.sql'])
+      expect(second.alreadyApplied).toEqual(['001_init.sql', '002_row_level_security.sql', '003_signing_keys.sql'])
     } finally {
       await db.close()
     }

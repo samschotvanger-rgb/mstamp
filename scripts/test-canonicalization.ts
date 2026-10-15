@@ -71,6 +71,7 @@ function sdkEvent(): IngestEvent {
     eventId: 'evt_SDK0000000000000001',
     receiptId: 'rcpt_SDK0000000000000001',
     timestamp: '2026-10-13T09:30:00.000Z',
+    latencyMs: 137,
     request: {
       method: 'POST',
       url: 'https://api.scraper-x.example/v1/extract?api_key=sk_live_QUERY_SECRET&q=shoes',

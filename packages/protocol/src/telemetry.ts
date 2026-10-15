@@ -404,6 +404,7 @@ export class Telemetry {
       eventId: `evt_${randomId()}`,
       receiptId: receipt.receiptId,
       timestamp: receipt.timestamp,
+      latencyMs: capture.latencyMs,
       request: {
         method: capture.method,
         url: capture.url,

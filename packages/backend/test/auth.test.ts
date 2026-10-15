@@ -18,6 +18,7 @@ import { createApp } from '../src/app.js'
 import { API_KEY_HEADER } from '../src/auth.js'
 import type { AppEnv } from '../src/env.js'
 import { createTestDb, seedTenant, type TestDb } from './helpers/pg.js'
+import { testSigningKey } from './helpers/keys.js'
 
 const KEY_A = 'sk_test_tenant_a_0000000000000000'
 const KEY_B = 'sk_test_tenant_b_1111111111111111'
@@ -31,7 +32,7 @@ describe('API key authentication', () => {
     db = await createTestDb()
     await seedTenant(db, { id: 'tnt_a', apiKey: KEY_A, name: 'Tenant A', plan: 'pro', spendLimitCents: 5000 })
     await seedTenant(db, { id: 'tnt_b', apiKey: KEY_B, name: 'Tenant B' })
-    app = createApp({ db: db.pool, version: 'test', onError: () => {} })
+    app = createApp({ db: db.pool, signer: await testSigningKey(), version: 'test', onError: () => {} })
     ready = true
   })
 
@@ -137,6 +138,7 @@ describe('API key authentication', () => {
           throw new Error('database is unreachable')
         },
       },
+      signer: await testSigningKey(),
       onError: () => {},
     })
 

@@ -31,6 +31,7 @@ function makeEvent(overrides: Partial<IngestEvent> = {}): IngestEvent {
     eventId: 'evt_0000000000000000001',
     receiptId: 'rcpt_0000000000000000001',
     timestamp: '2026-10-13T09:30:00.000Z',
+    latencyMs: 137,
     request: {
       method: 'POST',
       url: 'https://api.scraper-x.example/v1/extract',
