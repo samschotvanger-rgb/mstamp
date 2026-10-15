@@ -18,7 +18,7 @@ import { publicKeyBase64, verifyReceipt, type SigningKey } from '../src/crypto/s
 import { withTenant, type DbPool } from '../src/db/client.js'
 import { selectReceipt } from '../src/db/receipts.js'
 import { createTestDb, seedTenant, type TestDb } from './helpers/pg.js'
-import { fixedClock, makeIngestEvent, testSigningKey } from './helpers/keys.js'
+import { fixedClock, makeIngestEvent, testSigningKey, TEST_MASTER_KEY } from './helpers/keys.js'
 
 const KEY_A = 'sk_test_ingest_tenant_a'
 const SIGNED_AT = '2026-10-15T12:00:00.000Z'
@@ -53,7 +53,7 @@ describe('POST /v1/ingest/batch', () => {
     db = await createTestDb()
     signer = await testSigningKey()
     await seedTenant(db, { id: 'tnt_a', apiKey: KEY_A, name: 'Tenant A' })
-    app = createApp({ db: db.pool, signer, version: 'test', now: fixedClock(SIGNED_AT), onError: () => {} })
+    app = createApp({ masterKey: TEST_MASTER_KEY, db: db.pool, signer, version: 'test', now: fixedClock(SIGNED_AT), onError: () => {} })
     ready = true
   })
 
@@ -325,7 +325,7 @@ describe('POST /v1/ingest/batch', () => {
         throw new Error('database went away')
       },
     }
-    const flakyApp = createApp({ db: flaky, signer, version: 'test', onError: () => {} })
+    const flakyApp = createApp({ masterKey: TEST_MASTER_KEY, db: flaky, signer, version: 'test', onError: () => {} })
 
     const response = await postBatch(flakyApp, KEY_A, [makeIngestEvent({ receiptId: 'rcpt_unreachable' })])
 
@@ -340,7 +340,7 @@ describe('POST /v1/ingest/batch', () => {
       },
     }
     // Auth cannot even resolve, so this is the app-level 500 path, not the route's.
-    const brokenApp = createApp({ db: broken, signer, version: 'test', onError: () => {} })
+    const brokenApp = createApp({ masterKey: TEST_MASTER_KEY, db: broken, signer, version: 'test', onError: () => {} })
 
     const response = await postBatch(brokenApp, KEY_A, [makeIngestEvent()])
     expect(response.status).toBe(500)

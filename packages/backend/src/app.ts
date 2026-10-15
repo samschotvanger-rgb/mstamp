@@ -19,6 +19,7 @@ import type { AppEnv } from './env.js'
 import { healthRoutes } from './routes/health.js'
 import { ingestRoutes } from './routes/ingest.js'
 import { keysRoutes } from './routes/keys.js'
+import { receiptsRoutes, verifyReceiptHandler } from './routes/receipts.js'
 import { whoamiRoutes } from './routes/whoami.js'
 import { BACKEND_VERSION } from './version.js'
 
@@ -26,6 +27,8 @@ export type AppConfig = {
   db: DbPool
   /** The key receipts are signed with. Required - an unsigned backend is not a backend. */
   signer: SigningKey
+  /** Master key for payload preview encryption. Required in every mode. */
+  masterKey: Uint8Array
   /** Overrides the version read from `package.json`. Tests use this. */
   version?: string
   /**
@@ -47,12 +50,17 @@ export function createApp(config: AppConfig): Hono<AppEnv> {
       console.error('[notched] unhandled error', error)
     })
 
-  // 1. Public routes FIRST - health and the published keys. A verifier needs the public
-  //    keys before it has any credentials, which is the whole point of publishing them.
+  // 1. Public routes FIRST - health, the published keys, and receipt verification. Each
+  //    handler returns without calling `next()`, so the auth middleware registered below
+  //    never runs for them. A verifier holds a receipt and a public key and nothing else,
+  //    which is why these three are open.
   app.route('/v1/health', healthRoutes(config.version ?? BACKEND_VERSION))
   app.route('/v1/keys', keysRoutes({ signer: config.signer, pool: config.db }))
+  app.get('/v1/receipts/:id/verify', verifyReceiptHandler({ pool: config.db }))
 
-  // 2. Everything else under /v1 requires a key. Registered after the public routes.
+  // 2. Everything else under /v1 requires a key. Registered after the public routes, and
+  //    note that `/v1/receipts/:id` is registered below this line - so the collection read
+  //    is authenticated while the verify route above is not.
   app.use('/v1/*', apiKeyAuth(config.db))
 
   // 3. Authenticated routes.
@@ -62,10 +70,12 @@ export function createApp(config: AppConfig): Hono<AppEnv> {
     ingestRoutes({
       pool: config.db,
       signer: config.signer,
+      masterKey: config.masterKey,
       onError: reportError,
       ...(config.now === undefined ? {} : { now: config.now }),
     }),
   )
+  app.route('/v1/receipts', receiptsRoutes({ pool: config.db }))
 
   app.notFound((c) => c.json({ error: 'not_found' }, 404))
 

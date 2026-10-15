@@ -14,7 +14,7 @@ import { createApp } from '../src/app.js'
 import type { DbPool } from '../src/db/client.js'
 import type { AppEnv } from '../src/env.js'
 import { createTestDb, type TestDb } from './helpers/pg.js'
-import { testSigningKey } from './helpers/keys.js'
+import { testSigningKey, TEST_MASTER_KEY } from './helpers/keys.js'
 
 describe('GET /v1/health', () => {
   let db: TestDb
@@ -23,7 +23,7 @@ describe('GET /v1/health', () => {
 
   beforeAll(async () => {
     db = await createTestDb()
-    app = createApp({ db: db.pool, signer: await testSigningKey(), version: 'test-version' })
+    app = createApp({ masterKey: TEST_MASTER_KEY, db: db.pool, signer: await testSigningKey(), version: 'test-version' })
     ready = true
   })
 
@@ -52,7 +52,7 @@ describe('GET /v1/health', () => {
         throw new Error('database is unreachable')
       },
     }
-    const offlineApp = createApp({ db: brokenPool, signer: await testSigningKey(), version: 'offline' })
+    const offlineApp = createApp({ masterKey: TEST_MASTER_KEY, db: brokenPool, signer: await testSigningKey(), version: 'offline' })
 
     const response = await offlineApp.request('/v1/health')
 

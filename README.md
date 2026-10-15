@@ -16,9 +16,9 @@ return `200 OK` with broken, stale or empty data.
 
 ## Status
 
-**Weeks 1–3b complete.** The SDK is feature-complete; the backend signs receipts, accepts
-ingest and publishes its keys. Still absent by design: `/v1/receipts`, `/v1/verify`,
-payload encryption, the purge job and the CLI.
+**Weeks 1–3c complete — the backend is feature-complete.** The SDK observes and ships; the
+backend signs, stores, serves and expires. Still absent by design: the CLI, the standalone
+offline verifier, and deployment.
 
 | Deliverable | State |
 | --- | --- |
@@ -45,6 +45,10 @@ payload encryption, the purge job and the CLI.
 | Backend: Ed25519 receipt signing | done |
 | Backend: `POST /v1/ingest/batch` | done, idempotent on `receiptId` |
 | Backend: `GET /v1/keys` + `/v1/keys/current` | done, public, keys never deleted |
+| Backend: `GET /v1/receipts/:id` | done, tenant-scoped by RLS |
+| Backend: `GET /v1/receipts/:id/verify` | done, public, never exposes contents |
+| Backend: payload encryption (AES-256-GCM + HKDF) | done, per-tenant keys |
+| Backend: 7-day payload purge job | done, receipts never purged |
 
 ---
 
@@ -96,14 +100,19 @@ notched/
 │   │   ├── serve.ts                 # deployable entry point
 │   │   ├── version.ts               # /v1/health version, read from package.json
 │   │   ├── crypto/sign.ts           # Ed25519 sign/verify, payload from protocol
+│   │   ├── crypto/encrypt.ts        # AES-256-GCM + HKDF per-tenant keys
 │   │   ├── db/client.ts             # withTenant: SET LOCAL, never SET
 │   │   ├── db/keys.ts               # key publication, conflict detection
 │   │   ├── db/migrate.ts            # numbered SQL runner, checksummed
-│   │   ├── db/receipts.ts           # receipt insert/select
-│   │   └── routes/{health,whoami,keys,ingest}.ts
-│   └── test/                        # 105 tests against real Postgres in WASM
+│   │   ├── db/payloads.ts           # encrypted preview storage
+│   │   ├── db/receipts.ts           # receipt insert/select/verify-read
+│   │   ├── previews.ts              # what gets encrypted, and when
+│   │   ├── purge.ts                 # the 7-day retention job
+│   │   └── routes/{health,whoami,keys,ingest,receipts}.ts
+│   └── test/                        # 161 tests against real Postgres in WASM
 ├── docs/
 │   ├── canonicalization-decision.md
+│   ├── decisions.md                 # D-005, D-010, D-013 and onward
 │   └── receipt-schema.md            # normative V1 field set + verification recipe
 └── README.md
 ```
@@ -149,7 +158,7 @@ pnpm --filter @notched/protocol run test:watch
 
 ## What is verified
 
-442 tests, all passing.
+498 tests, all passing.
 
 **Canonicalization is byte-exact RFC 8785.** Verified against the IETF reference
 project's own vectors, vendored in `test/vectors/rfc8785.ts`:
@@ -553,6 +562,9 @@ and the cause was infrastructure rather than bad input, the response is **503**,
 200 would tell the SDK's queue the batch succeeded, so it would never retry and the
 telemetry would be lost silently — the opposite of what the fail-open design is for.
 
+**Status contract: `200` means the batch was processed, with per-event results in the body.
+`503` means the batch was not processed at all, and the caller should retry.**
+
 ### Verifying a receipt
 
 `GET /v1/keys/current` and `GET /v1/keys` need no auth, deliberately: a verifier holds a
@@ -574,12 +586,67 @@ millisecond precision on the way in for exactly that reason.
 
 ---
 
-## Week 3c next
+## Backend: receipts, verification, encryption and retention
 
-1. `GET /v1/receipts/:id` — tenant-scoped, never returns another tenant's data
-2. `GET /v1/receipts/:id/verify` — public; re-canonicalises and checks the signature
-3. Payload encryption: AES-256-GCM with a per-tenant key derived via HKDF
-4. The 7-day purge job
+### Reading a receipt
 
-Then Week 4: the `notched` CLI (`list`/`show`/`verify`/`scorecard`/`usage`) and the
-standalone offline verifier.
+`GET /v1/receipts/:id` is tenant-scoped by row-level security and **deliberately has no
+`WHERE tenant_id = ...` clause**. Duplicating the filter in application code would mask an
+RLS bug — the query would look correct while the policy was broken — and the duplicate would
+have to be kept in sync forever. A missing or unowned receipt is a **404, not a 403**: a 403
+would confirm the id exists, turning the endpoint into an existence oracle.
+
+### Public verification
+
+`GET /v1/receipts/:id/verify` needs no credentials. It re-canonicalises the stored receipt,
+checks the signature against the key named by `keyId`, and returns
+`{ valid, receiptId, signedAt, attestation, keyId }` — **never the receipt contents**.
+
+- A failed verification is a **200 with `valid: false`**, not an error. Only a missing
+  receipt is a 404.
+- Nothing in it throws. A corrupted signature, an unknown key id, or a stored payload that
+  cannot be canonicalised all resolve to `valid: false`, because a verifier that errors on
+  hostile input is a denial-of-service surface.
+- It crosses tenants by necessity, through a narrowly scoped `SECURITY DEFINER` function
+  rather than by relaxing the policy. The receipt id is the capability: roughly 126 bits.
+
+### Why the purge job needs definer rights
+
+RLS is enabled on `payloads`, so `DELETE FROM payloads WHERE expires_at < now()` run as the
+application role with no `app.tenant_id` set matches **zero rows**. The job would report
+success and retain everything — the worst possible failure for a retention guarantee. Both
+the purge and the verification lookup therefore go through `SECURITY DEFINER` functions,
+which scopes the privilege to those two operations instead of granting the app role
+`BYPASSRLS` and giving up tenant isolation everywhere. A test expires payloads for two
+tenants at once to prove it works.
+
+### Payload previews
+
+Body previews are the only near-verbatim buyer data Notched stores, so:
+
+- **Only `full` registration stores them.** `hash-only` and `local` never do, and
+  `storePreviews` re-checks the mode rather than trusting the caller.
+- **They are always encrypted** with AES-256-GCM under a per-tenant key derived by
+  `HKDF-SHA256(masterKey, salt, info)`, where `info` binds the key to the tenant *and* the
+  purpose. Nothing per-tenant is stored or rotated separately.
+- **They expire after seven days.** The receipt is the evidence; the preview is debugging.
+- **A cross-tenant read fails cryptographically, not just by policy.** Because the key comes
+  from the tenant, GCM's auth tag turns "the wrong tenant asked" into a `DecryptionError`
+  rather than plausible garbage. That is the second line of defence behind RLS, and the two
+  are tested separately — testing only one would leave the other as the sole protection.
+
+`NOTCHED_MASTER_KEY` is required in every mode, including a local-only deployment. A service
+that started without it would accept a `full`-registration event and then fail to store its
+preview, which surfaces as a per-event `rejected` count rather than as the configuration
+mistake it is.
+
+---
+
+## Week 4 next
+
+1. The `notched` CLI — `list`, `show`, `verify`, `scorecard`, `usage`
+2. The standalone offline verifier (`notched-verify`): receipt JSON + public key only
+3. End-to-end: SDK in cloud mode → backend signs → CLI verifies offline
+
+Then deployment (its own session): Railway, `NOTCHED_SIGNING_KEY`,
+`NOTCHED_MASTER_KEY`, migrations as a release step.

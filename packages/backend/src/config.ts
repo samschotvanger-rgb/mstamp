@@ -11,6 +11,7 @@
  * service works.
  */
 
+import { MasterKeyError, parseMasterKey } from './crypto/encrypt.js'
 import { SigningKeyError, parseSigningSeed, signingKeyFromSeed, type SigningKey } from './crypto/sign.js'
 import { BACKEND_VERSION } from './version.js'
 
@@ -24,6 +25,15 @@ export type ServerEnv = Record<string, string | undefined>
 export type ServiceConfig = {
   readonly databaseUrl: string
   readonly signingKey: SigningKey
+  /**
+   * 32-byte master key for payload preview encryption.
+   *
+   * Required in every mode, including local-only deployments. A service that starts
+   * without it would accept a `full`-registration event and then fail to store its
+   * preview - a per-event failure that shows up as a `rejected` count rather than as the
+   * configuration mistake it is.
+   */
+  readonly masterKey: Uint8Array
   readonly port: number
   readonly version: string
   readonly nodeEnv: string
@@ -62,9 +72,18 @@ export async function loadServiceConfig(env: ServerEnv = process.env): Promise<S
   const keyId = env['NOTCHED_SIGNING_KEY_ID']?.trim() || DEFAULT_KEY_ID
   const signingKey = await signingKeyFromSeed(parseSigningSeed(rawKey), keyId)
 
+  const rawMasterKey = env['NOTCHED_MASTER_KEY']?.trim()
+  if (rawMasterKey === undefined || rawMasterKey === '') {
+    throw new MasterKeyError(
+      'NOTCHED_MASTER_KEY is required: base64 of the 32-byte payload encryption key (e.g. `openssl rand -base64 32`)',
+    )
+  }
+  const masterKey = parseMasterKey(rawMasterKey)
+
   return {
     databaseUrl,
     signingKey,
+    masterKey,
     port: parsePort(env['PORT']),
     version: BACKEND_VERSION,
     nodeEnv: env['NODE_ENV']?.trim() || 'development',

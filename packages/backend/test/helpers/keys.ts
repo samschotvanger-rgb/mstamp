@@ -23,6 +23,14 @@ export const TEST_KEY_ID = 'k_test_0001'
 /** A second, unrelated key, for "wrong key" assertions. */
 export const OTHER_SEED = new Uint8Array(32).fill(2)
 
+/** 32 bytes of 0x03. The payload encryption master key. Never use this outside tests. */
+export const TEST_MASTER_KEY = new Uint8Array(32).fill(3)
+
+export const TEST_MASTER_KEY_BASE64 = Buffer.from(TEST_MASTER_KEY).toString('base64')
+
+/** A different master key, for "wrong master key" assertions. */
+export const OTHER_MASTER_KEY = new Uint8Array(32).fill(4)
+
 export async function testSigningKey(keyId: string = TEST_KEY_ID): Promise<SigningKey> {
   return signingKeyFromSeed(parseSigningSeed(TEST_SEED_BASE64), keyId)
 }

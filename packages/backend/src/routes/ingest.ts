@@ -26,6 +26,7 @@ import { signReceipt, type SigningKey } from '../crypto/sign.js'
 import { withTenant, type DbPool } from '../db/client.js'
 import { insertReceipt, selectReceipt } from '../db/receipts.js'
 import type { AppEnv } from '../env.js'
+import { storePreviews } from '../previews.js'
 
 const REGISTRATIONS: readonly string[] = ['full', 'hash-only', 'local']
 
@@ -40,6 +41,14 @@ export class InvalidIngestEventError extends Error {
 export type IngestRoutesConfig = {
   readonly pool: DbPool
   readonly signer: SigningKey
+  /**
+   * Master key for payload preview encryption.
+   *
+   * Required even when no `full`-registration event ever arrives: the route cannot know
+   * in advance, and a missing key would surface as a per-event `rejected` count rather
+   * than as the configuration mistake it is.
+   */
+  readonly masterKey: Uint8Array
   /** Injected clock, so `signedAt` is deterministic in tests. */
   readonly now?: () => number
   readonly onError?: (error: unknown) => void
@@ -232,6 +241,22 @@ async function signAndStore(config: IngestRoutesConfig, tenantId: string, event:
 
   const stored = await withTenant(config.pool, tenantId, async (tx) => {
     await insertReceipt(tx, receipt)
+
+    // Previews are encrypted and stored only for `full` registration; `storePreviews`
+    // re-checks that rather than trusting the event, because the point of `hash-only` is
+    // that previews never leave the process. Same transaction, so a receipt and its
+    // preview either both land or neither does.
+    await storePreviews(tx, {
+      masterKey: config.masterKey,
+      tenantId,
+      receiptId: receipt.receiptId,
+      registration: receipt.registration,
+      previews: {
+        request: event.request.bodyPreview,
+        response: event.response.bodyPreview,
+      },
+    })
+
     // Read back rather than returning what we built: on a duplicate the row already
     // there wins, and the response should describe what was stored, not what we tried.
     return selectReceipt(tx, receipt.receiptId)

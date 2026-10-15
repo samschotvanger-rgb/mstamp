@@ -46,7 +46,12 @@ export async function startService(env: ServerEnv = process.env): Promise<Runnin
     throw error
   }
 
-  const app = createApp({ db, signer: config.signingKey, version: config.version })
+  const app = createApp({
+    db,
+    signer: config.signingKey,
+    masterKey: config.masterKey,
+    version: config.version,
+  })
   const server = serve({ fetch: app.fetch, port: config.port })
 
   return {

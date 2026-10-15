@@ -12,7 +12,7 @@ import { createApp } from '../src/app.js'
 import { publicKeyBase64, signingKeyFromSeed } from '../src/crypto/sign.js'
 import { SigningKeyConflictError, listPublishedKeys, publishSigningKey } from '../src/db/keys.js'
 import { createTestDb, type TestDb } from './helpers/pg.js'
-import { OTHER_SEED, testSigningKey } from './helpers/keys.js'
+import { OTHER_SEED, testSigningKey, TEST_MASTER_KEY } from './helpers/keys.js'
 
 describe('the published key endpoints', () => {
   let db: TestDb
@@ -23,7 +23,7 @@ describe('the published key endpoints', () => {
   beforeAll(async () => {
     db = await createTestDb()
     signer = await testSigningKey()
-    app = createApp({ db: db.pool, signer, version: 'test', onError: () => {} })
+    app = createApp({ masterKey: TEST_MASTER_KEY, db: db.pool, signer, version: 'test', onError: () => {} })
     ready = true
   })
 
@@ -55,7 +55,7 @@ describe('the published key endpoints', () => {
   it('serves the current key even when the database is unreachable', async () => {
     // It is served from memory, so a database outage does not stop a verifier from
     // checking a receipt it already holds.
-    const offlineApp = createApp({
+    const offlineApp = createApp({ masterKey: TEST_MASTER_KEY,
       db: {
         async connect() {
           throw new Error('database is unreachable')

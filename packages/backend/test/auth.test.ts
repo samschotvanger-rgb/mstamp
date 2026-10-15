@@ -18,7 +18,7 @@ import { createApp } from '../src/app.js'
 import { API_KEY_HEADER } from '../src/auth.js'
 import type { AppEnv } from '../src/env.js'
 import { createTestDb, seedTenant, type TestDb } from './helpers/pg.js'
-import { testSigningKey } from './helpers/keys.js'
+import { testSigningKey, TEST_MASTER_KEY } from './helpers/keys.js'
 
 const KEY_A = 'sk_test_tenant_a_0000000000000000'
 const KEY_B = 'sk_test_tenant_b_1111111111111111'
@@ -32,7 +32,7 @@ describe('API key authentication', () => {
     db = await createTestDb()
     await seedTenant(db, { id: 'tnt_a', apiKey: KEY_A, name: 'Tenant A', plan: 'pro', spendLimitCents: 5000 })
     await seedTenant(db, { id: 'tnt_b', apiKey: KEY_B, name: 'Tenant B' })
-    app = createApp({ db: db.pool, signer: await testSigningKey(), version: 'test', onError: () => {} })
+    app = createApp({ masterKey: TEST_MASTER_KEY, db: db.pool, signer: await testSigningKey(), version: 'test', onError: () => {} })
     ready = true
   })
 
@@ -132,7 +132,7 @@ describe('API key authentication', () => {
   it('answers 500, not 401, when the database is unreachable', async () => {
     // Collapsing this into 401 would tell a caller with a perfectly good key that their
     // key is bad, sending them off to rotate credentials during an outage.
-    const offlineApp = createApp({
+    const offlineApp = createApp({ masterKey: TEST_MASTER_KEY,
       db: {
         async connect() {
           throw new Error('database is unreachable')

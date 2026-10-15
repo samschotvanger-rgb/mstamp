@@ -11,7 +11,7 @@
 
 import type { Attestation, Receipt, Registration, SchemaVersion, ValidationResult } from '@notched/protocol'
 
-import { queryRows, type DbConnection } from './client.js'
+import { queryRows, withConnection, type DbConnection, type DbPool } from './client.js'
 
 const INSERT_RECEIPT = `
   INSERT INTO receipts (
@@ -118,4 +118,30 @@ export async function selectReceipt(tx: DbConnection, receiptId: string): Promis
   const row = rows[0]
 
   return row === undefined ? null : rowToReceipt(row)
+}
+
+/**
+ * Read a receipt for PUBLIC verification, crossing tenants.
+ *
+ * This is the one read that is deliberately not tenant-scoped, and it is not an oversight.
+ * `GET /v1/receipts/:id/verify` takes no credentials by design - a verifier holds a
+ * receipt and nothing else - so there is no tenant to scope by. The receipt id is the
+ * capability: roughly 126 bits of nanoid, and the route exposes only
+ * `{ valid, receiptId, signedAt, attestation, keyId }`, never the receipt contents.
+ *
+ * It goes through a `SECURITY DEFINER` database function rather than relaxing the RLS
+ * policy, so the privilege is scoped to this one operation instead of making every
+ * receipt readable. See migration 004.
+ */
+export async function selectReceiptForVerification(pool: DbPool, receiptId: string): Promise<Receipt | null> {
+  return withConnection(pool, async (connection) => {
+    const rows = await queryRows<Record<string, unknown>>(
+      connection,
+      'SELECT * FROM notched_get_receipt_for_verification($1)',
+      [receiptId],
+    )
+    const row = rows[0]
+
+    return row === undefined ? null : rowToReceipt(row)
+  })
 }

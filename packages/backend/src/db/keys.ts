@@ -120,3 +120,37 @@ export async function listPublishedKeys(pool: DbPool): Promise<PublishedKey[]> {
     }))
   })
 }
+
+/**
+ * Look up one published key by id.
+ *
+ * Used by public verification, which reads `keyId` out of the receipt and needs the
+ * matching public key. Returns `null` for an unknown id - a receipt naming a key that was
+ * never published cannot be verified, which is a `valid: false`, not an error.
+ */
+export async function findPublishedKey(pool: DbPool, keyId: string): Promise<PublishedKey | null> {
+  if (keyId === '') return null
+
+  return withConnection(pool, async (connection) => {
+    const rows = await queryRows<{
+      key_id: string
+      algorithm: string
+      public_key: string
+      published_at: unknown
+    }>(
+      connection,
+      'SELECT key_id, algorithm, public_key, published_at FROM signing_keys WHERE key_id = $1',
+      [keyId],
+    )
+
+    const row = rows[0]
+    if (row === undefined) return null
+
+    return {
+      keyId: row.key_id,
+      algorithm: row.algorithm,
+      publicKey: row.public_key,
+      publishedAt: toIso(row.published_at),
+    }
+  })
+}
