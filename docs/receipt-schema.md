@@ -68,6 +68,30 @@ is the answer to field-level encryption. It is disclosed here, in the receipt's
 
 Hash format throughout: `"sha256:"` followed by 64 lowercase hex characters.
 
+### Sentinels: a hash slot that is not a hash
+
+Two situations produce no faithful hash. In both, the slot holds a **sentinel** and
+the receipt also carries a matching `unvalidated:` rule in `validation.rules`:
+
+| Situation | Slot value | Rule | `validation.passed` |
+| --- | --- | --- | --- |
+| Request body was `FormData`, `Blob` or `ReadableStream` | `sentinel:unsupported-body-type` | `unvalidated:unsupported-body-type` | `null` |
+| Response body exceeded `maxResponseBytes` | `sentinel:oversize` | `unvalidated:oversize` | `null` |
+
+**A sentinel never wears a `sha256:` prefix.** `sha256:unsupported-body-type` would
+look like a malformed digest and invite a verifier to treat it as corruption;
+`sentinel:` cannot be mistaken for a digest by any format check. A verifier that
+validates hash format must therefore reach exactly the same conclusion on every
+receipt: `isHash(sentinel) === false`.
+
+If a real rule also failed, `passed` is `false` rather than `null` — a positive finding
+about the response is not made untrue by an unrelated gap. `passed: true` never appears
+alongside an `unvalidated:` rule.
+
+An `unvalidated:` rule does **not** invalidate the signature. The sentinel is inside
+the signed payload like any other value, so the receipt still verifies; what it cannot
+do is prove anything about the bytes that were not hashed.
+
 ---
 
 ## `keyId` and key publication
@@ -118,8 +142,8 @@ compromised key is to publish the compromise, not to erase the key.
 | `sellerId` | `string \| null` | `"slr_" + nanoid`. Always `null` in V1; no seller co-signing. |
 | `provider` | `string` | e.g. `"scraper-x"` |
 | `operation` | `string` | e.g. `"extract"` |
-| `requestHash` | `string` | Redacted + canonicalized. See asymmetry above. |
-| `responseHash` | `string` | Raw received bytes. See asymmetry above. |
+| `requestHash` | `string` | Redacted + canonicalized, or a sentinel. See asymmetry and sentinels above. |
+| `responseHash` | `string` | Raw received bytes, or a sentinel. See asymmetry and sentinels above. |
 | `statusCode` | `number` | HTTP status as observed by the SDK. |
 | `latencyMs` | `number` | Wall-clock duration of the wrapped call. |
 | `timestamp` | `string` | ISO 8601 UTC, SDK clock, when the call completed. |

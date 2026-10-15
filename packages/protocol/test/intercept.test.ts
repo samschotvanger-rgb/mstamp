@@ -15,8 +15,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { canonicalizeJson } from '../src/canonical.js'
-import { hashCanonicalJson, hashRawBytes } from '../src/hash.js'
-import { instrumentFetch, type CapturedCall, type FetchLike } from '../src/intercept.js'
+import { SENTINELS, hashCanonicalJson, hashRawBytes, isHash, isSentinel } from '../src/hash.js'
+import { DEFAULT_MAX_RESPONSE_BYTES, instrumentFetch, type CapturedCall, type FetchLike } from '../src/intercept.js'
 import { redactBody } from '../src/redact.js'
 
 const RESPONSE_BODY = '{"items":[1,2,3],"meta":{"page":1}}'
@@ -349,9 +349,14 @@ describe('hashes', () => {
     await wrapped('https://api.example.com/v1/extract', { method: 'POST', body: stream } as RequestInit)
     const capture = await first()
 
-    // Reading the stream would have consumed the caller's request body, so we
-    // report null rather than invent a hash.
-    expect(capture.requestBodyHash).toBeNull()
+    // Reading the stream would have consumed the caller's request body, so this is
+    // reported as a sentinel - explicitly "not a hash" - rather than a guess.
+    expect(capture.requestBodyHash).toBe(SENTINELS.unsupportedBodyType)
+    // A sentinel must never wear a hash prefix, so a format check reaches the same
+    // conclusion on every receipt.
+    expect(isHash(capture.requestBodyHash)).toBe(false)
+    expect(capture.requestBodyHash.startsWith('sha256:')).toBe(false)
+    expect(isSentinel(capture.requestBodyHash)).toBe(true)
 
     // Proof it was left alone: the caller can still read it.
     const reader = stream.getReader()
@@ -508,5 +513,104 @@ describe('deferral and timing', () => {
     expect(response.status).toBe(204)
     expect(capture.responseBytes).toHaveLength(0)
     expect(capture.responseBodyHash).toBe(hashRawBytes(new Uint8Array(0)))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Response size cap (D-010)
+// ---------------------------------------------------------------------------
+
+describe('response size cap', () => {
+  it('defaults to 1 MB', () => {
+    expect(DEFAULT_MAX_RESPONSE_BYTES).toBe(1_048_576)
+  })
+
+  it('hashes a body exactly at the cap', async () => {
+    const body = 'x'.repeat(64)
+    const fetchImpl: FetchLike = async () => new Response(body)
+    const { onCapture, first } = collector()
+    const wrapped = instrumentFetch({ fetchImpl, onCapture, maxResponseBytes: 64 })
+
+    await wrapped('https://api.example.com/v1/extract')
+    const capture = await first()
+
+    // At the cap, not over it: a real hash.
+    expect(isHash(capture.responseBodyHash)).toBe(true)
+    expect(capture.responseBodyHash).toBe(hashRawBytes(UTF8.encode(body)))
+    expect(capture.responseBytes).toEqual(UTF8.encode(body))
+  })
+
+  it('emits sentinel:oversize one byte over the cap and retains nothing', async () => {
+    const fetchImpl: FetchLike = async () => new Response('x'.repeat(65))
+    const { onCapture, first } = collector()
+    const wrapped = instrumentFetch({ fetchImpl, onCapture, maxResponseBytes: 64 })
+
+    await wrapped('https://api.example.com/v1/extract')
+    const capture = await first()
+
+    expect(capture.responseBodyHash).toBe(SENTINELS.oversize)
+    // Never a hash prefix on a non-hash.
+    expect(isHash(capture.responseBodyHash)).toBe(false)
+    expect(isSentinel(capture.responseBodyHash)).toBe(true)
+    // `null` means "not retained", which is distinguishable from an empty body.
+    expect(capture.responseBytes).toBeNull()
+    expect(capture.responseBodyPreview).toBeNull()
+  })
+
+  it('leaves the caller\'s body fully readable after abandoning an oversized read', async () => {
+    // The critical safety property. Stopping early cancels the tee branch we were
+    // reading; per the streams spec that must not affect the caller's branch. If
+    // this ever fails, the cap is unsafe and must be implemented differently.
+    const body = 'x'.repeat(5000)
+    const fetchImpl: FetchLike = async () => new Response(body)
+    const { onCapture, first } = collector()
+    const wrapped = instrumentFetch({ fetchImpl, onCapture, maxResponseBytes: 100 })
+
+    const response = await wrapped('https://api.example.com/v1/extract')
+    const capture = await first()
+
+    expect(capture.responseBodyHash).toBe(SENTINELS.oversize)
+    expect(await response.text()).toBe(body)
+  })
+
+  it('stops pulling from the source once the cap is exceeded', async () => {
+    // Proves the cap actually caps memory rather than reading everything and
+    // rejecting afterwards.
+    let pulled = 0
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled++
+        if (pulled > 100) {
+          controller.close()
+          return
+        }
+        controller.enqueue(UTF8.encode('x'.repeat(1000)))
+      },
+    })
+
+    const fetchImpl: FetchLike = async () => new Response(stream)
+    const { onCapture, first } = collector()
+    const wrapped = instrumentFetch({ fetchImpl, onCapture, maxResponseBytes: 100 })
+
+    const response = await wrapped('https://api.example.com/v1/extract')
+    const capture = await first()
+
+    expect(capture.responseBodyHash).toBe(SENTINELS.oversize)
+    // One 1000-byte chunk is enough to exceed a 100-byte cap.
+    expect(pulled).toBeLessThan(5)
+
+    // Drain the caller's copy so no stream is left pending.
+    await response.arrayBuffer()
+  })
+
+  it('does not apply the cap to a small body', async () => {
+    const fetchImpl: FetchLike = async () => new Response(RESPONSE_BODY)
+    const { onCapture, first } = collector()
+    const wrapped = instrumentFetch({ fetchImpl, onCapture, maxResponseBytes: 1_048_576 })
+
+    await wrapped('https://api.example.com/v1/extract')
+    const capture = await first()
+
+    expect(capture.responseBodyHash).toBe(hashRawBytes(UTF8.encode(RESPONSE_BODY)))
   })
 })

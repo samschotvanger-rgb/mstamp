@@ -28,9 +28,18 @@
  */
 
 import { canonicalizeJson } from './canonical.js'
-import { hashCanonicalJson, hashRawBytes } from './hash.js'
+import { SENTINELS, hashCanonicalJson, hashRawBytes } from './hash.js'
 import { redactBody, redactHeaders, redactUrl, type RedactionPolicy } from './redact.js'
 import type { Registration } from './types.js'
+
+/**
+ * Default cap on how much of a response body is buffered (1 MB, per D-010).
+ *
+ * The cap exists because hashing raw bytes requires reading all of them: without a
+ * limit, interception would buffer an unbounded response into memory on the
+ * caller's behalf.
+ */
+export const DEFAULT_MAX_RESPONSE_BYTES = 1_048_576
 
 /** A `fetch`-compatible function. Structural, so DOMMatrix-free environments work. */
 export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
@@ -49,24 +58,31 @@ export type CapturedCall = {
   readonly requestHeaders: Record<string, string>
   /**
    * `"sha256:<hex>"` over the redacted, RFC 8785-canonicalized request body - the
-   * locked V1 behaviour.
+   * locked V1 behaviour - or `"sentinel:unsupported-body-type"`.
    *
-   * `null` when no faithful hash was possible: a `FormData`, `Blob` or
-   * `ReadableStream` body cannot be read without either consuming the caller's
-   * request or inventing bytes the wire never carried. Reporting `null` is
-   * deliberate; a guess here would be a receipt attesting to a request that was
-   * never made.
+   * A `FormData`, `Blob` or `ReadableStream` body cannot be read without either
+   * consuming the caller's request or inventing bytes the wire never carried, so it
+   * gets a sentinel rather than a guess. Never `sha256:`-prefixed unless it is a
+   * real digest.
    */
-  readonly requestBodyHash: string | null
+  readonly requestBodyHash: string
   /** Redacted body text, or `null`. Only ever populated in `full` registration. */
   readonly requestBodyPreview: string | null
   readonly status: number
   /** Redacted. */
   readonly responseHeaders: Record<string, string>
-  /** `"sha256:<hex>"` over the raw response bytes exactly as received. */
+  /**
+   * `"sha256:<hex>"` over the raw response bytes exactly as received, or
+   * `"sentinel:oversize"` when the body exceeded `maxResponseBytes`.
+   */
   readonly responseBodyHash: string
-  /** The raw response bytes, exactly as received. */
-  readonly responseBytes: Uint8Array
+  /**
+   * The raw response bytes, or `null` when the body was over the size cap.
+   *
+   * `null` (not retained) is distinguishable from a genuinely empty body, which is
+   * a zero-length `Uint8Array`.
+   */
+  readonly responseBytes: Uint8Array | null
   /** Redacted response text, or `null`. Only ever populated in `full` registration. */
   readonly responseBodyPreview: string | null
   readonly contentType: string
@@ -97,6 +113,14 @@ export type InterceptOptions = {
   now?: () => number
   /** Schedules the deferred capture. Defaults to `setImmediate`, falling back to a timer. */
   schedule?: (task: () => void) => void
+  /**
+   * Maximum response bytes to buffer for hashing. Defaults to
+   * `DEFAULT_MAX_RESPONSE_BYTES` (1 MB).
+   *
+   * Exceeding it yields `responseBodyHash: "sentinel:oversize"` and leaves
+   * `responseBytes` as `null`.
+   */
+  maxResponseBytes?: number
 }
 
 const UTF8_ENCODER = new TextEncoder()
@@ -237,7 +261,7 @@ function hashRequestBody(
   body: unknown,
   redaction: RedactionPolicy,
   registration: Registration,
-): { readonly hash: string | null; readonly preview: string | null } {
+): { readonly hash: string; readonly preview: string | null } {
   if (body === null || body === undefined) {
     // "No body" is the JSON value null, which is distinguishable from an
     // empty-string body (which canonicalises to `""`). Hashing empty bytes would
@@ -273,8 +297,9 @@ function hashRequestBody(
 
   // FormData, Blob, ReadableStream, and anything exotic. Reading these would
   // consume the caller's request or produce bytes that differ from the wire
-  // encoding. Report null rather than invent a hash.
-  return { hash: null, preview: null }
+  // encoding, so this is reported as a sentinel - explicitly "not a hash" - and the
+  // consumer records `unvalidated:unsupported-body-type` alongside it.
+  return { hash: SENTINELS.unsupportedBodyType, preview: null }
 }
 
 /** Hash a response body: raw bytes as received, with a redacted preview in `full`. */
@@ -303,6 +328,63 @@ function readContentType(headers: Record<string, string>): string {
   return ''
 }
 
+type BodyRead = { readonly kind: 'bytes'; readonly bytes: Uint8Array } | { readonly kind: 'oversize' }
+
+/**
+ * Read a response stream, giving up once the cap is exceeded.
+ *
+ * Stops early rather than reading to the end and rejecting afterwards: the whole
+ * point of the cap is that an oversized body is never buffered. On the oversize
+ * path the tee branch is cancelled so the buffered remainder is released - the
+ * caller's own branch is unaffected, because cancelling one branch of a tee does
+ * not cancel the other (asserted in the tests).
+ */
+async function readBodyWithCap(stream: ReadableStream<Uint8Array> | null, maxBytes: number): Promise<BodyRead> {
+  if (stream === null) return { kind: 'bytes', bytes: new Uint8Array(0) }
+
+  const reader = stream.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (value === undefined) continue
+
+      total += value.byteLength
+      if (total > maxBytes) {
+        // Deliberately NOT awaited. Cancelling one branch of a `tee` returns a
+        // promise that only settles once the OTHER branch is cancelled too, so
+        // `await`ing it here would deadlock the capture for every oversized body.
+        // Firing it and moving on still marks this branch cancelled, which is what
+        // stops the tee buffering the rest of the body for us.
+        void reader.cancel().catch(() => {
+          // Already closed or errored; nothing to release.
+        })
+        return { kind: 'oversize' }
+      }
+
+      chunks.push(value)
+    }
+  } finally {
+    try {
+      reader.releaseLock()
+    } catch {
+      // The reader was already released by `cancel()`.
+    }
+  }
+
+  const bytes = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+
+  return { kind: 'bytes', bytes }
+}
+
 type CaptureInput = {
   readonly observed: ObservedRequest
   readonly requestClone: Request | undefined
@@ -313,6 +395,7 @@ type CaptureInput = {
   readonly settledAt: number
   readonly redaction: RedactionPolicy
   readonly registration: Registration
+  readonly maxResponseBytes: number
 }
 
 /** Read the bodies and assemble the capture. Called off the caller's path. */
@@ -326,7 +409,7 @@ async function buildCapture(input: CaptureInput): Promise<CapturedCall> {
   // The clone path yields BYTES, so JSON parsing happens here and the parsed value
   // goes straight to the JSON hasher - it must not be routed through
   // `hashRequestBody`, which handles the shapes a caller can pass as `init.body`.
-  let requestHashed: { readonly hash: string | null; readonly preview: string | null }
+  let requestHashed: { readonly hash: string; readonly preview: string | null }
 
   if (observed.body === null && requestClone !== undefined) {
     const requestBytes = new Uint8Array(await requestClone.arrayBuffer())
@@ -339,8 +422,15 @@ async function buildCapture(input: CaptureInput): Promise<CapturedCall> {
     requestHashed = hashRequestBody(observed.body, redaction, registration)
   }
 
-  const responseBytes = new Uint8Array(await responseClone.arrayBuffer())
-  const responseHashed = hashResponseBody(responseBytes, redaction, registration)
+  // A capped read rather than `arrayBuffer()`: an oversized body must never be
+  // buffered, and there is no way to un-read it afterwards.
+  const bodyRead = await readBodyWithCap(responseClone.body, input.maxResponseBytes)
+  const oversize = bodyRead.kind === 'oversize'
+
+  const responseBytes = bodyRead.kind === 'bytes' ? bodyRead.bytes : null
+  const responseHashed = bodyRead.kind === 'bytes'
+    ? hashResponseBody(bodyRead.bytes, redaction, registration)
+    : { hash: SENTINELS.oversize, preview: null }
 
   return {
     method: observed.method,
@@ -352,7 +442,7 @@ async function buildCapture(input: CaptureInput): Promise<CapturedCall> {
     responseHeaders: input.responseHeaders,
     responseBodyHash: responseHashed.hash,
     responseBytes,
-    responseBodyPreview: responseHashed.preview,
+    responseBodyPreview: oversize ? null : responseHashed.preview,
     contentType: readContentType(input.responseHeaders),
     latencyMs: input.settledAt - input.startedAt,
     timestamp: new Date(input.settledAt).toISOString(),
@@ -372,6 +462,7 @@ export function instrumentFetch(options: InterceptOptions = {}): FetchLike {
   const redaction = options.redaction ?? {}
   const now = options.now ?? ((): number => Date.now())
   const schedule = options.schedule ?? defaultSchedule
+  const maxResponseBytes = options.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES
 
   if (typeof fetchImpl !== 'function') {
     // Fail like `fetch` would rather than throwing synchronously.
@@ -421,6 +512,7 @@ export function instrumentFetch(options: InterceptOptions = {}): FetchLike {
         settledAt,
         redaction,
         registration,
+        maxResponseBytes,
       }
 
       const callback = onCapture

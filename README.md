@@ -16,9 +16,9 @@ return `200 OK` with broken, stale or empty data.
 
 ## Status
 
-**Weeks 1, 2a and 2b-i complete.** Shared protocol package only; no backend, SDK or
-CLI code yet, by design. 2b-i added `fetch` interception and local SQLite storage;
-the cloud transport and the `Telemetry` class are still to come.
+**Weeks 1, 2a, 2b-i and 2b-ii complete — the SDK is feature-complete.** No backend
+or CLI yet, by design. Receipt signing, storage and verification remain the
+backend's job; the SDK only observes, validates and ships.
 
 | Deliverable | State |
 | --- | --- |
@@ -35,6 +35,9 @@ the cloud transport and the `Telemetry` class are still to come.
 | `queue.ts` — fail-open queue and circuit breaker | done |
 | `intercept.ts` — `fetch` wrapper, non-mutating and fail-open | done |
 | `local-db.ts` — SQLite receipt store (`node:sqlite`) | done |
+| `cloud.ts` — ingestion transport, 100-event batches | done |
+| `telemetry.ts` — the `Telemetry` entry point | done |
+| Integration test — silent-failure scenario end to end | done |
 
 ---
 
@@ -54,6 +57,8 @@ notched/
 │       │   ├── queue.ts             # fail-open queue + circuit breaker
 │       │   ├── intercept.ts         # non-mutating, fail-open fetch wrapper
 │       │   ├── local-db.ts          # SQLite receipt store (node:sqlite)
+│       │   ├── cloud.ts             # ingestion transport (/v1/ingest/batch)
+│       │   ├── telemetry.ts         # the Telemetry SDK entry point
 │       │   └── index.ts
 │       └── test/
 │           ├── canonical.test.ts    # 55 tests: conformance + guard
@@ -62,8 +67,11 @@ notched/
 │           ├── receipt.test.ts      # 16 tests
 │           ├── validate.test.ts     # 68 tests: every rule, pass/fail/missing
 │           ├── queue.test.ts        # 29 tests: drop policy, breaker, retry timing
-│           ├── intercept.test.ts    # 26 tests: pass-through, hashes, fail-open
+│           ├── intercept.test.ts    # 32 tests: pass-through, hashes, cap, fail-open
 │           ├── local-db.test.ts     # 25 tests: round-trip, concurrency, lifecycle
+│           ├── cloud.test.ts        # 16 tests: HTTP contract + fail-open seam
+│           ├── telemetry.test.ts    # 38 tests: registration, assembly, resilience
+│           ├── integration.test.ts  # 13 tests: the whole pipeline end to end
 │           ├── bakeoff.test.ts      # 5 tests: the library decision
 │           └── vectors/rfc8785.ts   # vendored IETF conformance corpus
 ├── scripts/
@@ -115,7 +123,7 @@ pnpm --filter @notched/protocol run test:watch
 
 ## What is verified
 
-264 tests, all passing.
+337 tests, all passing.
 
 **Canonicalization is byte-exact RFC 8785.** Verified against the IETF reference
 project's own vectors, vendored in `test/vectors/rfc8785.ts`:
@@ -209,6 +217,69 @@ Two deliberate choices worth knowing:
 
 `flush()` never rejects. A caller awaiting it is waiting for an attempt to finish,
 not for a result it must handle.
+
+---
+
+## The SDK entry point
+
+```ts
+const telemetry = new Telemetry({
+  mode: 'cloud',
+  apiKey: process.env.NOTCHED_KEY,
+  defaultRegistration: 'hash-only',
+  registrationPolicy: { 'scraper-x': 'full', 'internal-pii-api': 'hash-only' },
+  sdkVersion: '0.1.0',
+})
+
+const scraperFetch = telemetry.instrumentFetch({ provider: 'scraper-x', operation: 'extract' })
+
+// One-off, with per-call validation:
+await telemetry.wrap(fetch, url, init, {
+  provider: 'scraper-x',
+  operation: 'extract',
+  rules: ['min-length:items:1'],
+})
+```
+
+`Telemetry` decides two things and nothing more: **which registration applies** (per
+call, then per-provider policy, then the configured default) and **whether to enqueue
+a cloud POST** (`mode === "cloud"` and the resolved registration is not `local`). It
+never signs.
+
+Receipts written locally are unsigned drafts: `attestation: "self"`, `keyId: null`,
+`serverSignature: null`. Claiming `"platform"` locally would assert an attestation
+that has not happened yet — the backend sets that when it signs.
+
+## Sentinels: non-hashes are never dressed as hashes
+
+Two situations produce no faithful hash. Both put a **sentinel** in the hash slot and a
+matching **`unvalidated:`** rule on the receipt:
+
+| Situation | Hash slot | Rule | `validation.passed` |
+| --- | --- | --- | --- |
+| `FormData` / `Blob` / `ReadableStream` request body | `sentinel:unsupported-body-type` | `unvalidated:unsupported-body-type` | `null` |
+| Response body over `maxResponseBytes` | `sentinel:oversize` | `unvalidated:oversize` | `null` |
+
+The `sentinel:` prefix is load-bearing, not cosmetic. `sha256:unsupported-body-type`
+would look like a malformed digest and invite a verifier to treat it as a corrupt
+hash; `sentinel:` cannot be mistaken for one by any format check. `isHash()` returns
+`false` and `isSentinel()` returns `true` for both — asserted in the tests.
+
+Where a real rule *also* failed, `passed` stays `false`: that is a positive finding
+about the response, and an unrelated gap does not make it untrue. What never happens is
+`passed: true` while an `unvalidated:` rule is present.
+
+## Response size cap
+
+`maxResponseBytes` defaults to **1 MB** (D-010). The read stops as soon as the cap is
+exceeded, rather than reading to the end and rejecting afterwards, so an oversized body
+is never buffered.
+
+The caller still receives every byte. Cancelling the `tee` branch telemetry was reading
+leaves the caller's branch untouched — verified by a test that compares the full body
+after an abandoned read. (One subtlety worth recording: a `tee` branch's `cancel()`
+promise only settles once the *other* branch is cancelled, so awaiting it deadlocks.
+It is fired and not awaited.)
 
 ---
 
@@ -315,18 +386,21 @@ Deliberate V1 scope, recorded so they are not mistaken for oversights:
 - **`validation.passed: null` is not a pass.** Anything consuming a scorecard must
   exclude nulls; a naive `passed !== false` check would count unvalidated calls as
   good.
-- **Interception buffers the whole response body in memory**, because hashing the
-  raw bytes requires reading all of them. A very large response therefore costs
-  memory proportional to its size. Hashing the raw bytes and leaving the caller's
-  stream untouched are in tension; the tee from `Response.clone()` is the only way
-  to have both.
+- **Interception buffers at most `maxResponseBytes` (1 MB by default).** Hashing the
+  raw bytes requires reading them, so this cap is the only thing between a large
+  response and unbounded memory. The cost: a response over the cap is **not covered by
+  the receipt** — it carries `sentinel:oversize` and is never hashed. Raise the cap if
+  that matters for a provider.
 - **Request bodies that cannot be read without side effects get
-  `requestBodyHash: null`.** A `FormData`, `Blob` or `ReadableStream` body is
-  neither consumed nor guessed at: consuming it would disturb the caller's request,
-  and inventing bytes would produce a receipt for a request that was never made.
-  `Receipt.requestHash` is a required `string`, so those requests cannot currently
-  produce a V1 receipt. JSON POSTs carried as strings are fully covered, and
-  `Request`-carried bodies are reached through a non-destructive clone.
+  `sentinel:unsupported-body-type`** rather than a hash. A `FormData`, `Blob` or
+  `ReadableStream` body is neither consumed nor guessed at: consuming it would disturb
+  the caller's request, and inventing bytes would produce a receipt for a request that
+  was never made. JSON POSTs carried as strings are fully covered, and `Request`-carried
+  bodies are reached through a non-destructive clone.
+- **A cloud-mode local draft records `tenantId: "tnt_local"`** unless you configure
+  one. The real tenant is resolved by the backend from the API key, so the SDK may
+  simply not know it. The local row is a draft; the authoritative receipt is the
+  backend's.
 - **A non-JSON request or response body gets no preview, even in `full` mode.**
   Structural redaction is impossible for it, and a raw preview could disclose a
   credential verbatim. The hash is unaffected: it covers the raw bytes.
@@ -339,12 +413,17 @@ Deliberate V1 scope, recorded so they are not mistaken for oversights:
 
 ---
 
-## Week 2b-ii next
+## Week 3 next — the backend
 
-1. `cloud.ts` — ingestion POST, consuming `TelemetryQueue` as its transport
-2. `telemetry.ts` — wire interception, redaction, hashing, validation, local storage
-   and the queue together into the `Telemetry` class
-3. Integration test: wrap a fake scraper returning `{"items": []}`, assert the
-   receipt records `validation.passed = false`
-4. Fail-open test: kill the backend mid-call, assert the primary fetch still
-   succeeds and the process exits cleanly
+The V1 handoff's Week 3, unchanged in scope:
+
+1. Hono app with `/v1/health` and `/v1/ingest/batch`
+2. Postgres schema + migrations with row-level tenant isolation
+3. API key middleware resolving tenant from `X-API-Key`
+4. Ed25519 signing with `@noble/ed25519` — **server-side only**, never in the SDK
+5. `GET /v1/receipts/:id` and the public `/v1/receipts/:id/verify`
+6. Payload encryption and the 7-day purge job
+7. Deploy to Railway
+
+Then Week 4: the `notched` CLI (`list`/`show`/`verify`/`scorecard`/`usage`) and the
+standalone offline verifier.

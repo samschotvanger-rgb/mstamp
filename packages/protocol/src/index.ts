@@ -3,8 +3,8 @@
  *
  * Imported by the SDK, the CLI and the backend. Keeping types, canonicalization,
  * hashing, redaction, the signing payload, response validation, the fail-open queue,
- * `fetch` interception and local storage in one package is what stops those three
- * from drifting apart.
+ * `fetch` interception, local storage, cloud ingestion and the `Telemetry` entry
+ * point in one package is what stops those three from drifting apart.
  */
 
 export * from './types.js'
@@ -16,3 +16,5 @@ export * from './validate.js'
 export * from './queue.js'
 export * from './intercept.js'
 export * from './local-db.js'
+export * from './cloud.js'
+export * from './telemetry.js'
