@@ -16,9 +16,9 @@ return `200 OK` with broken, stale or empty data.
 
 ## Status
 
-**Weeks 1, 2a, 2b-i and 2b-ii complete — the SDK is feature-complete.** No backend
-or CLI yet, by design. Receipt signing, storage and verification remain the
-backend's job; the SDK only observes, validates and ships.
+**Weeks 1–3a complete.** The SDK is feature-complete and the backend has its skeleton,
+schema and tenant isolation. Still absent by design: signing, ingest, `/v1/keys`,
+`/v1/receipts`, `/v1/verify` and the CLI.
 
 | Deliverable | State |
 | --- | --- |
@@ -38,6 +38,10 @@ backend's job; the SDK only observes, validates and ships.
 | `cloud.ts` — ingestion transport, 100-event batches | done |
 | `telemetry.ts` — the `Telemetry` entry point | done |
 | Integration test — silent-failure scenario end to end | done |
+| Backend: Hono app + `/v1/health` | done |
+| Backend: numbered SQL migrations + runner | done |
+| Backend: row-level tenant isolation (RLS) | done |
+| Backend: API key auth middleware | done |
 
 ---
 
@@ -76,15 +80,28 @@ notched/
 │           └── vectors/rfc8785.ts   # vendored IETF conformance corpus
 ├── scripts/
 │   └── test-canonicalization.ts     # SDK vs backend vs independent verifier
+├── packages/backend/                # the Notched service
+│   ├── migrations/
+│   │   ├── 001_init.sql             # tenants, receipts, payloads, indexes
+│   │   └── 002_row_level_security.sql  # app role, RLS, tenant_isolation policy
+│   ├── src/
+│   │   ├── app.ts                   # createApp: route order is security-relevant
+│   │   ├── auth.ts                  # X-API-Key -> tenant, or 401
+│   │   ├── env.ts                   # shared Hono env + Tenant type
+│   │   ├── version.ts               # /v1/health version, read from package.json
+│   │   ├── db/client.ts             # withTenant: SET LOCAL, never SET
+│   │   ├── db/migrate.ts            # numbered SQL runner, checksummed
+│   │   └── routes/{health,whoami}.ts
+│   └── test/                        # 35 tests against real Postgres in WASM
 ├── docs/
 │   ├── canonicalization-decision.md
 │   └── receipt-schema.md            # normative V1 field set + verification recipe
 └── README.md
 ```
 
-`packages/sdk`, `packages/cli` and `packages/backend` do not exist yet. All
-shared logic goes in `packages/protocol` so the signer and the verifier cannot
-drift apart.
+`packages/sdk` and `packages/cli` do not exist yet. All logic shared between the SDK,
+the CLI and the backend lives in `packages/protocol`, so the signer and the verifier
+cannot drift apart.
 
 ---
 
@@ -123,7 +140,7 @@ pnpm --filter @notched/protocol run test:watch
 
 ## What is verified
 
-337 tests, all passing.
+372 tests, all passing.
 
 **Canonicalization is byte-exact RFC 8785.** Verified against the IETF reference
 project's own vectors, vendored in `test/vectors/rfc8785.ts`:
@@ -413,17 +430,76 @@ Deliberate V1 scope, recorded so they are not mistaken for oversights:
 
 ---
 
-## Week 3 next — the backend
+## Backend: tenant isolation
 
-The V1 handoff's Week 3, unchanged in scope:
+Row-level security is enabled on `receipts` and `payloads` with a `tenant_isolation`
+policy. The application connects as `notched_app`, a non-superuser role, because **a
+table owner and a superuser both bypass RLS entirely** — running the isolation tests as
+the migration user would make them pass vacuously. A test asserts the app role has
+`rolsuper = false` and `rolbypassrls = false` for exactly that reason.
 
-1. Hono app with `/v1/health` and `/v1/ingest/batch`
-2. Postgres schema + migrations with row-level tenant isolation
-3. API key middleware resolving tenant from `X-API-Key`
-4. Ed25519 signing with `@noble/ed25519` — **server-side only**, never in the SDK
-5. `GET /v1/receipts/:id` and the public `/v1/receipts/:id/verify`
-6. Payload encryption and the 7-day purge job
-7. Deploy to Railway
+Three details decide whether RLS protects anything at all:
 
-Then Week 4: the `notched` CLI (`list`/`show`/`verify`/`scorecard`/`usage`) and the
-standalone offline verifier.
+- **`SET LOCAL`, never `SET`.** `SET` is session-scoped, so on a pooled connection it
+  survives the request that set it and is inherited by whichever request next checks
+  out that connection — silently granting one tenant access to another's rows. The
+  value is applied with `set_config('app.tenant_id', $1, true)` inside a transaction:
+  the third argument *is* `SET LOCAL`, and the function form is used because a literal
+  `SET LOCAL` cannot take a bind parameter, and interpolating one would be an injection
+  hole. A test proves the setting does not survive its transaction.
+- **`WITH CHECK`, not just `USING`.** `USING` filters reads; without `WITH CHECK` a
+  tenant could still `INSERT` rows claiming to be someone else. Tested by attempting a
+  forged cross-tenant insert.
+- **Fails closed.** With `app.tenant_id` unset, `current_setting(..., true)` is NULL,
+  the comparison is NULL, and the tenant sees **no rows** rather than every row.
+
+`tenants` deliberately has no RLS: the API key middleware must resolve a tenant *before*
+any tenant is known, so that lookup cannot be tenant-scoped. The consequence is that the
+app role can read all `api_key_hash` values — necessary, and worth remembering.
+
+### Schema notes
+
+Two deliberate differences from the handoff's schema, both requested:
+
+- `schema_version` and `key_id` are added — the handoff predates both fields.
+- `server_signature` and `signed_at` are **nullable**. The handoff had `signed_at
+  TIMESTAMPTZ NOT NULL DEFAULT now()`, but a receipt is inserted *before* it is signed
+  and updated in place afterwards, so a NOT NULL default would record an ingest time as
+  a signing time.
+
+### Migrations
+
+Numbered `.sql` files under `packages/backend/migrations/`, applied in filename order by
+`src/db/migrate.ts` — no ORM, so the schema is reviewable in a diff. Each migration runs
+in its own transaction (Postgres has transactional DDL, so a failure leaves nothing
+behind), and **applied migrations are checksummed**: editing one that has already run is
+refused, because the deployed database would never see the change and would silently
+diverge from a freshly-migrated one.
+
+### Testing against real Postgres
+
+Backend tests run against `@electric-sql/pglite` — PostgreSQL compiled to WASM. A JS
+emulator would let an RLS test pass without a policy ever running; PGlite enforces the
+real thing, needs no server and works in CI. Migrations run as the owner, then the
+session switches to `notched_app` so RLS actually bites.
+
+Production is driven by `pg` through `poolFromPg`; it and the PGlite harness satisfy the
+same `DbConnection` interface, so the `withTenant` code path under test is the one that
+runs in production. The single place the drivers differ is documented in
+`test/helpers/pg.ts`: `pg` sends a parameterless query over the simple protocol, which
+permits several statements in one call — exactly what executing a migration file needs —
+whereas PGlite's `query()` always uses the extended protocol, so the harness routes
+parameterless calls to `exec()`.
+
+---
+
+## Week 3b next
+
+1. Ed25519 signing with `@noble/ed25519` — **server-side only**, never in the SDK
+2. `POST /v1/ingest/batch` — idempotent on `receiptId`, signing the canonical payload
+   from `@notched/protocol`, storing, and encrypting `full`-mode previews
+3. `GET /v1/keys` — publishes every public key ever used, and never deletes one
+4. Payload encryption (AES-256-GCM, per-tenant key via HKDF) and the 7-day purge job
+
+Then 3c: `GET /v1/receipts/:id` and the public `GET /v1/receipts/:id/verify`.
+Then Week 4: the `notched` CLI and the standalone offline verifier.

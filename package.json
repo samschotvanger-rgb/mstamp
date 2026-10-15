@@ -9,7 +9,7 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "test": "pnpm --filter @notched/protocol test && vitest run",
+    "test": "pnpm --filter @notched/protocol test && pnpm --filter @notched/backend test && vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json && pnpm -r typecheck",
     "build": "pnpm -r build"
