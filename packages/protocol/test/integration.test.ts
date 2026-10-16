@@ -38,6 +38,8 @@ function makeTelemetry(overrides: Partial<TelemetryConfig> = {}): Telemetry {
     defaultProvider: 'scraper-x',
     defaultOperation: 'extract',
     registrationPolicy: { 'scraper-x': 'hash-only' },
+    // Required in cloud mode; harmless in local mode.
+    endpoint: 'https://ingest.test',
     queueOptions: { retryAttempts: 0, telemetryTimeoutMs: 200, maxQueueSize: 100 },
     ...overrides,
   })

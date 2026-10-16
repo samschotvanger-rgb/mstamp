@@ -37,13 +37,16 @@ mstamp/
 │       └── test/                  # runs against real PostgreSQL in WASM
 ├── docs/
 │   ├── receipt-schema.md             # normative field set + verification recipe
-│   └── canonicalization-decision.md  # why the canonicalizer was chosen
+│   ├── canonicalization-decision.md  # why the canonicalizer was chosen
+│   └── decisions-public.md           # the decisions that constrain the protocol
 ├── scripts/
 │   └── test-canonicalization.ts      # independent verifier path, cross-checked
 └── package.json
 ```
 
 All logic shared between the library and the backend lives in `packages/protocol`, so the signer and a verifier cannot drift apart. The backend imports the signing payload from there rather than reimplementing it. The canonicalizer was selected by a measured comparison against the alternatives, recorded in [docs/canonicalization-decision.md](docs/canonicalization-decision.md).
+
+Wherever a source comment or this README cites a numbered decision such as `D-015`, it resolves in [docs/decisions-public.md](docs/decisions-public.md) — the subset of the decision log that constrains the wire format, the hashes and the privacy posture. Entry numbers match the full internal log, so the citations stay stable.
 
 ## Requirements
 
@@ -76,6 +79,7 @@ import { Telemetry } from '@mstamp/protocol'
 const telemetry = new Telemetry({
   mode: 'cloud',                                // 'local' keeps everything in-process
   apiKey: '<tenant API key>',                   // required in cloud mode
+  endpoint: 'https://ingest.example.com',       // required in cloud mode, no default
   defaultRegistration: 'hash-only',             // 'full' also sends redacted previews
   registrationPolicy: { 'scraper-x': 'full' },  // per-provider override
   sdkVersion: '0.1.0',
@@ -104,7 +108,7 @@ await telemetry.wrap(fetch, url, init, {
 
 `Telemetry` decides two things and nothing more: which `registration` applies (per call, then per-provider policy, then the configured default), and whether to enqueue a cloud POST. **It never signs.** In `local` mode, receipts are written unsigned to `.mstamp/receipts.db` (`attestation: "self"`, with `keyId`, `serverSignature` and `signedAt` all `null`); the backend is what makes a receipt a signed, `"platform"`-attested one. Use `isSignedReceipt()` rather than checking those fields by hand — a signature without a signing time is not a usable attestation.
 
-Configuration mistakes throw at construction, not at request time: a missing API key in cloud mode, or a missing `sdkVersion`, fails immediately rather than as a silent absence of receipts. Interception itself is fail-open; a capture that cannot complete is abandoned and the caller's call is unaffected. The default cloud endpoint is `https://api.mstamp.dev`.
+Configuration mistakes throw at construction, not at request time: a missing API key or `endpoint` in cloud mode, or a missing `sdkVersion`, fails immediately rather than as a silent absence of receipts. Interception itself is fail-open; a capture that cannot complete is abandoned and the caller's call is unaffected. **There is no default endpoint, deliberately** — "where does my telemetry go" is the caller's decision, so the library refuses to make it. `endpoint` is required in cloud mode and unused in local mode, where nothing is ever posted.
 
 ## Receipts
 

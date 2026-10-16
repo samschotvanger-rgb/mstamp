@@ -27,6 +27,9 @@ function makeTelemetry(overrides: Partial<TelemetryConfig> = {}): Telemetry {
     localDbPath: ':memory:',
     defaultProvider: 'scraper-x',
     defaultOperation: 'extract',
+    // Required in cloud mode. Harmless in local mode, and it keeps the cloud-mode
+    // overrides in this file from having to repeat it at every call site.
+    endpoint: 'https://ingest.test',
     // Short timeouts keep failure paths fast without weakening queue.test.ts, which
     // owns the real timing assertions.
     queueOptions: { retryAttempts: 0, telemetryTimeoutMs: 100, maxQueueSize: 100 },
@@ -92,6 +95,31 @@ describe('construction', () => {
     expect(() => new Telemetry({ mode: 'cloud', defaultRegistration: 'hash-only', sdkVersion: '0.1.0' })).toThrow(
       /requires an apiKey/,
     )
+  })
+
+  it('throws when cloud mode has no endpoint', () => {
+    // There is no default endpoint on purpose. A library-supplied hostname would send
+    // every caller's telemetry to a domain the caller does not own.
+    expect(
+      () => new Telemetry({ mode: 'cloud', apiKey: 'sk_test', defaultRegistration: 'hash-only', sdkVersion: '0.1.0' }),
+    ).toThrow(/requires an endpoint/)
+  })
+
+  it('rejects a whitespace-only endpoint in cloud mode', () => {
+    expect(
+      () =>
+        new Telemetry({
+          mode: 'cloud',
+          apiKey: 'sk_test',
+          endpoint: '   ',
+          defaultRegistration: 'hash-only',
+          sdkVersion: '0.1.0',
+        }),
+    ).toThrow(/requires an endpoint/)
+  })
+
+  it('does not require an endpoint in local mode, where nothing is posted', () => {
+    expect(() => new Telemetry({ mode: 'local', defaultRegistration: 'local', sdkVersion: '0.1.0', localDbPath: ':memory:' })).not.toThrow()
   })
 
   it('throws when sdkVersion is empty', () => {

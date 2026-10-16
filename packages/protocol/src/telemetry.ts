@@ -40,9 +40,6 @@ import { validateRawBody, type SchemaLike } from './validate.js'
 /** Where local receipts go by default, relative to the working directory. */
 export const DEFAULT_LOCAL_DB_PATH = '.mstamp/receipts.db'
 
-/** Where cloud events go by default. */
-export const DEFAULT_ENDPOINT = 'https://api.mstamp.dev'
-
 /** Tenant id recorded on locally-written drafts (D-014). */
 export const LOCAL_TENANT_ID = 'tnt_local'
 
@@ -89,7 +86,15 @@ export type TelemetryConfig = {
   maxResponseBytes?: number
 
   // --- plumbing ---
-  /** Ingestion host. Defaults to `DEFAULT_ENDPOINT`. */
+  /**
+   * Ingestion host, e.g. `"https://ingest.example.com"`. The ingest path is appended.
+   *
+   * **Required in cloud mode**, validated at construction exactly like `apiKey`. There
+   * is deliberately no default. A baked-in hostname would mean every caller posts
+   * telemetry to a domain the library author controls and the caller does not, and
+   * "where does my data go" is the caller's decision to make, not a library default.
+   * Unused in local mode, where nothing is ever posted.
+   */
   endpoint?: string
   /** SQLite path. Defaults to `DEFAULT_LOCAL_DB_PATH`; use `':memory:'` in tests. */
   localDbPath?: string
@@ -158,6 +163,11 @@ export class Telemetry {
     if (config.mode === 'cloud' && (config.apiKey === undefined || config.apiKey === '')) {
       throw new Error('Telemetry in cloud mode requires an apiKey')
     }
+    // Checked after `apiKey` so the two messages stay distinguishable in tests and in
+    // whatever logs a misconfigured deployment produces.
+    if (config.mode === 'cloud' && (config.endpoint === undefined || config.endpoint.trim() === '')) {
+      throw new Error('Telemetry in cloud mode requires an endpoint')
+    }
     if (config.sdkVersion === '') {
       throw new Error('Telemetry requires an sdkVersion')
     }
@@ -169,7 +179,9 @@ export class Telemetry {
     this.#registrationPolicy = config.registrationPolicy ?? {}
     this.#sdkVersion = config.sdkVersion
     this.#maxResponseBytes = config.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES
-    this.#endpoint = config.endpoint ?? DEFAULT_ENDPOINT
+    // Validated above in cloud mode, and never read in local mode - `#createQueue`
+    // returns `null` there - so the empty string is unreachable rather than a default.
+    this.#endpoint = config.endpoint ?? ''
     this.#cloudFetch = config.cloudFetch
     this.#now = config.now ?? ((): number => Date.now())
     this.#defaultProvider = config.defaultProvider ?? 'unknown'
