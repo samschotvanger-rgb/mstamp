@@ -6,8 +6,8 @@
  * - unlike a JS emulator, which would let an RLS test pass without RLS ever running.
  * It also needs no server, so `pnpm test` works anywhere.
  *
- * Migrations run as the owner (which creates the tables and the `notched_app` role),
- * and then the session switches to `notched_app`. That switch is essential: a table
+ * Migrations run as the owner (which creates the tables and the `mstamp_app` role),
+ * and then the session switches to `mstamp_app`. That switch is essential: a table
  * owner and a superuser both bypass RLS entirely, so without it every isolation
  * assertion here would be vacuous.
  */
@@ -19,7 +19,7 @@ import { withTenant, type DbConnection, type DbPool } from '../../src/db/client.
 import { migrate } from '../../src/db/migrate.js'
 
 /** The non-superuser application role created by migration 002. */
-export const APP_ROLE = 'notched_app'
+export const APP_ROLE = 'mstamp_app'
 
 /**
  * Adapt PGlite to `DbPool`.

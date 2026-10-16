@@ -1,7 +1,7 @@
 /**
  * Candidate RFC 8785 canonicalizers, behind one interface.
  *
- * This exists for one reason: the V1 handoff names `json-freeze`, but a
+ * This exists for one reason: the original spec names `json-freeze`, but a
  * canonicalization bug invalidates every receipt ever issued, so the choice has
  * to be made on measured behaviour rather than on a README claim. Every
  * candidate runs against the identical official vector corpus and is scored on
@@ -9,7 +9,7 @@
  *
  * The chosen implementation is used by `src/canonical.ts`. The two runners-up
  * stay in devDependencies so this comparison remains reproducible for the
- * external crypto review required before the first pilot.
+ * independent crypto review required before any production use.
  */
 
 import { existsSync, readFileSync } from 'node:fs'
@@ -84,7 +84,7 @@ export async function loadCandidates(): Promise<readonly CanonicalizerCandidate[
       id: 'json-freeze',
       version: packageVersion('json-freeze'),
       canonicalize: unwrap(jsonFreezeMod, 'canonicalize'),
-      note: 'Named by the V1 handoff. Single maintainer, single release, no subsequent commits.',
+      note: 'Named by the original spec. Single maintainer, single release, no subsequent commits.',
     },
   ]
 }

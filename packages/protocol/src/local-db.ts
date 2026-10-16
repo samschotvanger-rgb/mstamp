@@ -15,7 +15,7 @@
  *
  *   - **No cloud sync.** That is 2b-ii. `put()` writes locally and returns.
  *   - **No raw payload storage.** Receipts contain hashes and metadata, not bodies,
- *     which is what makes encryption unnecessary here (see the handoff: hash-only is
+ *     which is what makes encryption unnecessary here (see the original spec: hash-only is
  *     the V1 answer to field-level encryption).
  *
  * `put()` THROWS on failure. A store that silently swallowed a write error would

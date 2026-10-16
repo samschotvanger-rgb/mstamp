@@ -16,14 +16,14 @@
 --      rows and the job would silently do nothing while reporting success - the worst
 --      possible failure for a retention guarantee.
 --
--- The alternative - granting `notched_app` `BYPASSRLS` - would remove tenant isolation
+-- The alternative - granting `mstamp_app` `BYPASSRLS` - would remove tenant isolation
 -- everywhere. `SECURITY DEFINER` scopes the privilege to exactly these two operations.
 --
 -- `SET search_path = public, pg_temp` on each function is not decoration: a
 -- `SECURITY DEFINER` function without a pinned search_path can be hijacked by a caller
 -- who creates a shadowing object in a schema earlier on the path.
 
-CREATE OR REPLACE FUNCTION notched_get_receipt_for_verification(p_receipt_id text)
+CREATE OR REPLACE FUNCTION mstamp_get_receipt_for_verification(p_receipt_id text)
 RETURNS SETOF receipts
 LANGUAGE sql
 SECURITY DEFINER
@@ -32,7 +32,7 @@ AS $$
   SELECT * FROM receipts WHERE id = p_receipt_id
 $$;
 
-CREATE OR REPLACE FUNCTION notched_purge_expired_payloads()
+CREATE OR REPLACE FUNCTION mstamp_purge_expired_payloads()
 RETURNS integer
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -50,13 +50,13 @@ $$;
 
 -- Functions default to EXECUTE for PUBLIC. Revoke first, then grant to exactly the role
 -- that needs it.
-REVOKE ALL ON FUNCTION notched_get_receipt_for_verification(text) FROM PUBLIC;
-REVOKE ALL ON FUNCTION notched_purge_expired_payloads() FROM PUBLIC;
+REVOKE ALL ON FUNCTION mstamp_get_receipt_for_verification(text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION mstamp_purge_expired_payloads() FROM PUBLIC;
 
-GRANT EXECUTE ON FUNCTION notched_get_receipt_for_verification(text) TO notched_app;
-GRANT EXECUTE ON FUNCTION notched_purge_expired_payloads() TO notched_app;
+GRANT EXECUTE ON FUNCTION mstamp_get_receipt_for_verification(text) TO mstamp_app;
+GRANT EXECUTE ON FUNCTION mstamp_purge_expired_payloads() TO mstamp_app;
 
 -- The purge job deletes only from `payloads`. It cannot touch `receipts`: receipts are
 -- the evidence, payloads are the retention-limited convenience copy.
-COMMENT ON FUNCTION notched_purge_expired_payloads() IS
+COMMENT ON FUNCTION mstamp_purge_expired_payloads() IS
   'Deletes expired payload previews only. Receipts are never purged.';

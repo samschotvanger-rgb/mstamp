@@ -1,22 +1,22 @@
 # Canonicalization decision record
 
-**Status:** decided, Week 1
+**Status:** decided (2026-10-12)
 **Selected implementation:** [`canonicalize`](https://www.npmjs.com/package/canonicalize) v5.1.0
-**Rejected:** `json-freeze` v1.0.0 (named by the V1 handoff), `json-canonicalize` v3.0.1
+**Rejected:** `json-freeze` v1.0.0 (named by the original spec), `json-canonicalize` v3.0.1
 
 This record exists because a canonicalization bug invalidates every receipt ever
-issued, silently and irreversibly. The V1 handoff names `json-freeze`; that
+issued, silently and irreversibly. The original spec names `json-freeze`; that
 instruction was treated as a hypothesis and tested rather than followed.
 
 Reproduce with:
 
 ```sh
-pnpm --filter @notched/protocol exec vitest run test/bakeoff.test.ts
+pnpm --filter @mstamp/protocol exec vitest run test/bakeoff.test.ts
 ```
 
 ## 1. Conformance (asserted)
 
-All three candidates are **byte-perfect RFC 8785** on valid I-JSON. The handoff's
+All three candidates are **byte-perfect RFC 8785** on valid I-JSON. The original spec's
 suspicion of `json-freeze` was, on this axis, unfounded.
 
 | Corpus | `canonicalize` | `json-canonicalize` | `json-freeze` |
@@ -88,8 +88,8 @@ single-maintainer package with one release and no subsequent commits — not
 Use `canonicalize`, wrapped in the I-JSON guard in `src/canonical.ts`.
 
 The runner-up implementations are retained as **devDependencies** so this
-comparison stays reproducible for the external cryptographic review the handoff
-requires before the first pilot. They ship to nobody.
+comparison stays reproducible for the independent cryptographic review that is
+required before any production use. They are never shipped to consumers.
 
 ## 5. Consequences
 
@@ -100,12 +100,12 @@ requires before the first pilot. They ship to nobody.
   `receipt.test.ts`. If that value ever changes, the signed bytes changed, which
   means previously-issued receipts became unverifiable. Treat a change as a
   protocol-version decision, never a side effect.
-- Node floor is **22.0.0** — `canonicalize` v5 requires it. The handoff said
+- Node floor is **22.0.0** — `canonicalize` v5 requires it. The original spec said
   "Node.js 20+"; this is a deliberate, minor deviation.
 
-## 6. Spec amendment: the handoff's NFC rule was wrong (accepted 2026-10-13)
+## 6. Spec amendment: the original spec's NFC rule was wrong (accepted 2026-10-13)
 
-The handoff lists, as an RFC 8785 rule:
+The original spec lists, as an RFC 8785 rule:
 
 > Normalize unicode to NFC
 
@@ -132,7 +132,7 @@ the vector.
 **Implemented:** no normalisation. `A`+U+030A and U+00C5 are treated as distinct
 inputs with distinct hashes.
 
-**Status: amendment confirmed by the project owner on 2026-10-13.** The handoff's
+**Status: amendment confirmed by the project owner on 2026-10-13.** The original spec's
 "Normalize unicode to NFC" rule is struck from the canonicalization spec.
 
 ## 7. Related schema amendment: unsigned fields

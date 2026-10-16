@@ -1,10 +1,10 @@
-# Notched Receipt schema
+# mstamp Receipt schema
 
 **Current version:** `1`
-**Signed by:** the Notched backend, Ed25519
+**Signed by:** the mstamp backend, Ed25519
 **Verifiable:** offline, with only the receipt JSON and a public key
 
-A Notched Receipt is a portable, offline-verifiable record of one external API
+A mstamp Receipt is a portable, offline-verifiable record of one external API
 call. This document is the normative description of the V1 field set.
 
 ---
@@ -20,7 +20,7 @@ fields:
 | `signedAt` | **no** | Assigned at signing time, so it cannot be an input to signing. |
 | every other field | **yes** | Includes `schemaVersion`, `keyId`, and the reserved V2 fields. |
 
-`receiptSigningPayload()` in `@notched/protocol` builds this object, and both the
+`receiptSigningPayload()` in `@mstamp/protocol` builds this object, and both the
 signer and any verifier must call it rather than reimplementing the rule. A
 reimplementation that disagrees by one field silently makes every receipt
 unverifiable.
@@ -176,7 +176,7 @@ it does not compute one. A non-JSON response is hashed and marked
 | Value | Meaning |
 | --- | --- |
 | `self` | Written locally by the buyer's SDK. Nobody countersigned it. `serverSignature` is `null`. |
-| `platform` | Signed by the Notched backend. V1 cloud mode. |
+| `platform` | Signed by the mstamp backend. V1 cloud mode. |
 | `bilateral` | Seller co-signed. V2. |
 | `notarized` | Hardware-attested. V3+. |
 

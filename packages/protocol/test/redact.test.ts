@@ -23,7 +23,7 @@ import {
 } from '../src/redact.js'
 
 describe('redactHeaders', () => {
-  it('always strips the headers the handoff names', () => {
+  it('always strips the headers the original spec names', () => {
     const out = redactHeaders({
       authorization: 'Bearer sk_live_abc',
       cookie: 'session=xyz',
@@ -57,14 +57,14 @@ describe('redactHeaders', () => {
     const out = redactHeaders({
       'content-type': 'application/json',
       accept: 'application/json',
-      'user-agent': 'notched-sdk/0.1.0',
+      'user-agent': 'mstamp-sdk/0.1.0',
       'x-request-id': 'req_123',
       'cache-control': 'no-cache',
     })
     expect(out).toEqual({
       'content-type': 'application/json',
       accept: 'application/json',
-      'user-agent': 'notched-sdk/0.1.0',
+      'user-agent': 'mstamp-sdk/0.1.0',
       'x-request-id': 'req_123',
       'cache-control': 'no-cache',
     })
@@ -166,7 +166,7 @@ describe('redactUrl', () => {
 
   it('redacts URL userinfo', () => {
     // Without this, credentials embedded in the URL would be stored verbatim in
-    // the event's `request.url` - a leak the handoff's header/body rules miss.
+    // the event's `request.url` - a leak the original spec's header/body rules miss.
     const out = redactUrl('https://user:s3cret@api.example.com/v1/extract')
     expect(out).not.toContain('s3cret')
     expect(out).toContain('api.example.com')

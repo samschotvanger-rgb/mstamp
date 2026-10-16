@@ -24,7 +24,7 @@ import type { FetchLike } from '../src/intercept.js'
 import { TelemetryQueue, type DropEvent } from '../src/queue.js'
 import { MAX_EVENTS_PER_BATCH, type IngestEvent, type IngestRequest } from '../src/types.js'
 
-const ENDPOINT = 'https://api.notched.test'
+const ENDPOINT = 'https://api.mstamp.test'
 
 function makeEvent(overrides: Partial<IngestEvent> = {}): IngestEvent {
   return {

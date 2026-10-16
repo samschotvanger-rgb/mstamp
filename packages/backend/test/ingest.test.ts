@@ -9,7 +9,7 @@
  * the bytes the signature covers, and verification fails.
  */
 
-import { MAX_EVENTS_PER_BATCH, type Receipt } from '@notched/protocol'
+import { MAX_EVENTS_PER_BATCH, type Receipt } from '@mstamp/protocol'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { createApp } from '../src/app.js'

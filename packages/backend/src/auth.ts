@@ -1,8 +1,8 @@
 /**
  * API key authentication.
  *
- * API keys only - no JWT, no sessions, per the V1 handoff. The key is hashed with
- * the same SHA-256 implementation the rest of Notched uses, and looked up against
+ * API keys only - no JWT, no sessions, per the original spec. The key is hashed with
+ * the same SHA-256 implementation the rest of mstamp uses, and looked up against
  * `tenants.api_key_hash`. The key itself is never stored and never logged.
  *
  * Note where `app.tenant_id` is set and where it is not. This middleware resolves
@@ -17,7 +17,7 @@
  * before any tenant is known, so it cannot be tenant-scoped.
  */
 
-import { hashRawBytes } from '@notched/protocol'
+import { hashRawBytes } from '@mstamp/protocol'
 import type { MiddlewareHandler } from 'hono'
 
 import { queryRows, withConnection, withTenant, type DbConnection, type DbPool } from './db/client.js'

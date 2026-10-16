@@ -172,7 +172,7 @@ describe('canonicalizeJson - I-JSON guard', () => {
 })
 
 // ---------------------------------------------------------------------------
-// C. The individual rules the handoff enumerates
+// C. The individual rules the original spec enumerates
 // ---------------------------------------------------------------------------
 
 describe('canonicalizeJson - rule coverage', () => {
@@ -272,7 +272,7 @@ describe('canonicalizeJson - rule coverage', () => {
   })
 
   it('does NOT apply Unicode NFC normalisation - it preserves input as-is', () => {
-    // The V1 handoff listed "Normalize unicode to NFC" as an RFC 8785 rule.
+    // The original spec listed "Normalize unicode to NFC" as an RFC 8785 rule.
     // It is not one: RFC 8785 3.1 states JCS does not consider Unicode
     // Normalization and that all components MUST preserve string data "as is".
     // The official `unicode.json` vector proves it - expected output is

@@ -2,7 +2,7 @@
  * Body previews: what gets encrypted, and when.
  *
  * Previews exist so a buyer can see what a provider actually returned when a validation
- * rule failed. They are the only near-verbatim data Notched stores, which is why three
+ * rule failed. They are the only near-verbatim data mstamp stores, which is why three
  * things are true of them:
  *
  *   - **Only `full` registration stores them.** `hash-only` and `local` never do. This is
@@ -20,7 +20,7 @@
 import { decryptForTenant, encryptForTenant } from './crypto/encrypt.js'
 import { insertEncryptedPayload, selectEncryptedPayload } from './db/payloads.js'
 import type { DbConnection } from './db/client.js'
-import type { Registration } from '@notched/protocol'
+import type { Registration } from '@mstamp/protocol'
 
 export type StoredPreviews = {
   readonly request: string | null

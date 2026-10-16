@@ -1,7 +1,7 @@
 /**
  * End-to-end integration test: the whole SDK pipeline in one call.
  *
- * This is the test the V1 handoff asks for - a fake scraper returning `{"items": []}`
+ * This is the test the original spec asks for - a fake scraper returning `{"items": []}`
  * validated with `min-length:items:1`, asserting the receipt records a failure - but
  * it deliberately checks the seams too, because the pipeline crosses four modules:
  *
@@ -55,7 +55,7 @@ function fakeScraper(): { fetchImpl: FetchLike; calls: string[] } {
   return { fetchImpl, calls }
 }
 
-/** The Notched backend stand-in: records what the SDK posted. */
+/** The mstamp backend stand-in: records what the SDK posted. */
 function fakeBackend(): { cloudFetch: FetchLike; posts: IngestRequest[] } {
   const posts: IngestRequest[] = []
   const cloudFetch: FetchLike = async (_input, init) => {

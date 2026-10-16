@@ -1,8 +1,8 @@
 /**
  * Payload preview encryption: AES-256-GCM with a per-tenant key derived via HKDF.
  *
- * Raw body previews are the only thing Notched stores that could contain a buyer's data
- * verbatim, and the handoff's rule is explicit: never store raw payloads without
+ * Raw body previews are the only thing mstamp stores that could contain a buyer's data
+ * verbatim, and the original spec's rule is explicit: never store raw payloads without
  * encryption. They are also the only thing with a retention limit - seven days - because
  * they exist to help a buyer debug, not to be evidence. The receipt is the evidence, and
  * it holds hashes.
@@ -42,14 +42,14 @@ export const TAG_BYTES = 16
 export const ENVELOPE_HEADER_BYTES = 1 + IV_BYTES + TAG_BYTES
 
 /** Fixed application salt. The tenant and purpose go in `info`, not here. */
-const HKDF_SALT = Buffer.from('notched/hkdf/v1', 'utf8')
+const HKDF_SALT = Buffer.from('mstamp/hkdf/v1', 'utf8')
 
 /** Binds a derived key to its purpose, format version, and tenant. */
 function hkdfInfo(tenantId: string): Buffer {
-  return Buffer.from(`notched/payload/aes-256-gcm/v1/${tenantId}`, 'utf8')
+  return Buffer.from(`mstamp/payload/aes-256-gcm/v1/${tenantId}`, 'utf8')
 }
 
-/** Thrown for anything wrong with `NOTCHED_MASTER_KEY`. */
+/** Thrown for anything wrong with `MSTAMP_MASTER_KEY`. */
 export class MasterKeyError extends Error {
   constructor(message: string) {
     super(message)
@@ -66,7 +66,7 @@ export class DecryptionError extends Error {
 }
 
 /**
- * Parse `NOTCHED_MASTER_KEY`: base64 of 32 bytes.
+ * Parse `MSTAMP_MASTER_KEY`: base64 of 32 bytes.
  *
  * Same strictness as the signing key, for the same reason: a lenient base64 decode turns
  * a typo into a *different* key, and the symptom would be undecryptable payloads rather
@@ -76,10 +76,10 @@ export function parseMasterKey(base64: string): Uint8Array {
   const key = base64ToBytes(base64)
 
   if (key === null) {
-    throw new MasterKeyError('NOTCHED_MASTER_KEY is not valid base64')
+    throw new MasterKeyError('MSTAMP_MASTER_KEY is not valid base64')
   }
   if (key.length !== MASTER_KEY_BYTES) {
-    throw new MasterKeyError(`NOTCHED_MASTER_KEY must decode to ${MASTER_KEY_BYTES} bytes, got ${key.length}`)
+    throw new MasterKeyError(`MSTAMP_MASTER_KEY must decode to ${MASTER_KEY_BYTES} bytes, got ${key.length}`)
   }
 
   return key

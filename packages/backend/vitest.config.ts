@@ -5,10 +5,10 @@ export default defineConfig({
   resolve: {
     alias: {
       // Point the workspace package at its SOURCE, so the backend suite runs without
-      // building @notched/protocol first. Production still resolves the built dist/
+      // building @mstamp/protocol first. Production still resolves the built dist/
       // through the normal node_modules symlink; this only affects tests and mirrors
       // the `paths` entry in tsconfig.json.
-      '@notched/protocol': fileURLToPath(new URL('../protocol/src/index.ts', import.meta.url)),
+      '@mstamp/protocol': fileURLToPath(new URL('../protocol/src/index.ts', import.meta.url)),
     },
   },
   test: {

@@ -1,2 +1,6 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Auto detect text files and perform LF normalization.
+#
+# `eol=lf` pins the working-tree form as well as the stored form. Without it a
+# Windows checkout writes CRLF, which shows up as spurious diff noise and breaks
+# any script with a `#!/usr/bin/env` shebang.
+* text=auto eol=lf

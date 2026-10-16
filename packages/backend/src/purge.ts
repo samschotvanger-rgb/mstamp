@@ -12,7 +12,7 @@
  * Why it goes through a database function rather than a plain DELETE: row-level security
  * is enabled on `payloads`, so a `DELETE ... WHERE expires_at < now()` run as the
  * application role with no `app.tenant_id` set matches **zero rows**. The job would report
- * success and silently retain everything. `notched_purge_expired_payloads()` is
+ * success and silently retain everything. `mstamp_purge_expired_payloads()` is
  * `SECURITY DEFINER`, so it runs with the table owner's rights and crosses tenants; see
  * migration 004.
  */
@@ -33,7 +33,7 @@ export async function purgeExpiredPayloads(pool: DbPool): Promise<PurgeResult> {
   return withConnection(pool, async (connection) => {
     const rows = await queryRows<{ deleted: number | string | null }>(
       connection,
-      'SELECT notched_purge_expired_payloads() AS deleted',
+      'SELECT mstamp_purge_expired_payloads() AS deleted',
     )
 
     return { deleted: Number(rows[0]?.deleted ?? 0) }

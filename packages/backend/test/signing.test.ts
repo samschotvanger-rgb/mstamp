@@ -11,7 +11,7 @@
  * possible to add a signature to a receipt without invalidating it.
  */
 
-import { canonicalizeReceiptForSigning, type Receipt } from '@notched/protocol'
+import { canonicalizeReceiptForSigning, type Receipt } from '@mstamp/protocol'
 import * as ed from '@noble/ed25519'
 import { describe, expect, it } from 'vitest'
 

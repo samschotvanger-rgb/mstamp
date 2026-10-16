@@ -1,14 +1,14 @@
 /**
- * The receipt signing payload - the exact bytes the Notched backend signs and an
+ * The receipt signing payload - the exact bytes the mstamp backend signs and an
  * offline verifier must reconstruct.
  *
- * Why this lives in `@notched/protocol` rather than in the backend: the signer
+ * Why this lives in `@mstamp/protocol` rather than in the backend: the signer
  * and the verifier run in different processes, in different codebases, possibly
  * years apart. The only way to guarantee they agree is for both to call this one
  * function. Any reimplementation - however faithful - is a future signature
  * verification failure.
  *
- * The rule (V1 handoff): canonical JSON of the receipt WITHOUT `serverSignature`
+ * The rule (original spec): canonical JSON of the receipt WITHOUT `serverSignature`
  * and `signedAt`. Those two fields are added after signing, so including them
  * would be circular.
  */

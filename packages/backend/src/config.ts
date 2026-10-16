@@ -15,7 +15,7 @@ import { MasterKeyError, parseMasterKey } from './crypto/encrypt.js'
 import { SigningKeyError, parseSigningSeed, signingKeyFromSeed, type SigningKey } from './crypto/sign.js'
 import { BACKEND_VERSION } from './version.js'
 
-/** Default key id, per the V1 handoff. */
+/** Default key id, per the original spec. */
 export const DEFAULT_KEY_ID = 'k_0001'
 
 export const DEFAULT_PORT = 3000
@@ -62,20 +62,20 @@ export async function loadServiceConfig(env: ServerEnv = process.env): Promise<S
     throw new Error('DATABASE_URL is required')
   }
 
-  const rawKey = env['NOTCHED_SIGNING_KEY']?.trim()
+  const rawKey = env['MSTAMP_SIGNING_KEY']?.trim()
   if (rawKey === undefined || rawKey === '') {
     throw new SigningKeyError(
-      'NOTCHED_SIGNING_KEY is required: base64 of the 32-byte Ed25519 seed (e.g. `openssl rand -base64 32`)',
+      'MSTAMP_SIGNING_KEY is required: base64 of the 32-byte Ed25519 seed (e.g. `openssl rand -base64 32`)',
     )
   }
 
-  const keyId = env['NOTCHED_SIGNING_KEY_ID']?.trim() || DEFAULT_KEY_ID
+  const keyId = env['MSTAMP_SIGNING_KEY_ID']?.trim() || DEFAULT_KEY_ID
   const signingKey = await signingKeyFromSeed(parseSigningSeed(rawKey), keyId)
 
-  const rawMasterKey = env['NOTCHED_MASTER_KEY']?.trim()
+  const rawMasterKey = env['MSTAMP_MASTER_KEY']?.trim()
   if (rawMasterKey === undefined || rawMasterKey === '') {
     throw new MasterKeyError(
-      'NOTCHED_MASTER_KEY is required: base64 of the 32-byte payload encryption key (e.g. `openssl rand -base64 32`)',
+      'MSTAMP_MASTER_KEY is required: base64 of the 32-byte payload encryption key (e.g. `openssl rand -base64 32`)',
     )
   }
   const masterKey = parseMasterKey(rawMasterKey)

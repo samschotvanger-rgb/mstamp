@@ -1,8 +1,8 @@
 /**
- * `@notched/backend` - the Notched service.
+ * `@mstamp/backend` - the mstamp service.
  *
- * Week 3c: receipt retrieval, public verification, payload encryption and the retention
- * job. The backend is feature-complete apart from deployment.
+ * Receipt signing, ingest, receipt retrieval, public verification, payload encryption
+ * and the retention job. What remains is deployment.
  */
 
 export * from './env.js'

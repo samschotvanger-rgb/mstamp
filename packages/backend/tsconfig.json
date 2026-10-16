@@ -4,7 +4,7 @@
     "noEmit": true,
     "types": ["node"],
     "paths": {
-      "@notched/protocol": ["../protocol/src/index.ts"]
+      "@mstamp/protocol": ["../protocol/src/index.ts"]
     }
   },
   "include": ["src/**/*.ts", "test/**/*.ts"]

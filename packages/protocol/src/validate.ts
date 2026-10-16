@@ -23,7 +23,7 @@
  *      rather than having unvalidated calls inflate it.
  *
  * Zod is supported but NOT required: `SchemaLike` is structural, so Zod, Valibot,
- * ArkType or a hand-rolled validator all work, and `@notched/protocol` carries no
+ * ArkType or a hand-rolled validator all work, and `@mstamp/protocol` carries no
  * runtime dependency on any of them.
  */
 
@@ -36,7 +36,7 @@ export const NON_JSON_RULE = 'unvalidated:non-json'
 /** Rule id recorded when a schema was supplied. Deliberately schema-library-neutral. */
 export const SCHEMA_RULE = 'schema'
 
-/** The six built-in rules from the V1 handoff. */
+/** The six built-in rules from the original spec. */
 export const BUILT_IN_RULES = [
   'non-empty',
   'has-field',

@@ -19,7 +19,7 @@ import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { sha256Hex } from '@notched/protocol'
+import { sha256Hex } from '@mstamp/protocol'
 
 import { queryRows, withConnection, type DbConnection, type DbPool } from './client.js'
 

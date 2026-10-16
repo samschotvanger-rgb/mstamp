@@ -18,7 +18,7 @@
  *     individually guarded so a broken local database cannot stop a cloud POST, or
  *     vice versa. The caller's API call is unaffected by any of it.
  *
- * The configuration fields marked "plumbing" are additions beyond the V1 handoff's
+ * The configuration fields marked "plumbing" are additions beyond the original spec's
  * list. They exist because the specified fields alone leave no way to point at a
  * test endpoint, inject a clock, or disable local persistence.
  */
@@ -38,12 +38,12 @@ import type { IngestEvent, Receipt, Registration, RegistrationPolicy, TelemetryM
 import { validateRawBody, type SchemaLike } from './validate.js'
 
 /** Where local receipts go by default, relative to the working directory. */
-export const DEFAULT_LOCAL_DB_PATH = '.notched/receipts.db'
+export const DEFAULT_LOCAL_DB_PATH = '.mstamp/receipts.db'
 
 /** Where cloud events go by default. */
-export const DEFAULT_ENDPOINT = 'https://api.notched.dev'
+export const DEFAULT_ENDPOINT = 'https://api.mstamp.dev'
 
-/** Tenant id recorded on locally-written drafts (D-005). */
+/** Tenant id recorded on locally-written drafts (D-014). */
 export const LOCAL_TENANT_ID = 'tnt_local'
 
 const ID_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_-'
@@ -85,7 +85,7 @@ export type TelemetryConfig = {
   /** Per-provider registration overrides. */
   registrationPolicy?: RegistrationPolicy
   sdkVersion: string
-  /** Response body cap in bytes. Defaults to 1 MB (D-010). */
+  /** Response body cap in bytes. Defaults to 1 MB (D-015). */
   maxResponseBytes?: number
 
   // --- plumbing ---

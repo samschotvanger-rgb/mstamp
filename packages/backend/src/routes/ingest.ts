@@ -19,7 +19,7 @@
  * fail-open design is for.
  */
 
-import { MAX_EVENTS_PER_BATCH, type IngestEvent, type Receipt, type Registration, type ValidationResult } from '@notched/protocol'
+import { MAX_EVENTS_PER_BATCH, type IngestEvent, type Receipt, type Registration, type ValidationResult } from '@mstamp/protocol'
 import { Hono } from 'hono'
 
 import { signReceipt, type SigningKey } from '../crypto/sign.js'

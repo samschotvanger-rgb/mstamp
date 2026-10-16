@@ -1,5 +1,5 @@
 /**
- * SHA-256 hashing in the Notched tagged format: `"sha256:" + lowercase hex`.
+ * SHA-256 hashing in the mstamp tagged format: `"sha256:" + lowercase hex`.
  *
  * Two distinct entry points exist because the request and the response are
  * hashed differently, and conflating them would be a real bug:

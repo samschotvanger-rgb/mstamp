@@ -4,7 +4,7 @@
  * The signature is the whole product: if it is wrong, every receipt is worthless. Three
  * things therefore matter more than anything else here.
  *
- *   1. **The signing payload comes from `@notched/protocol`, not from here.** It is
+ *   1. **The signing payload comes from `@mstamp/protocol`, not from here.** It is
  *      produced by `canonicalizeReceiptForSigning`, which strips `serverSignature` and
  *      `signedAt` *entirely* (not set to null - omitted) and canonicalises the rest per
  *      RFC 8785. Reimplementing that in the backend would let the signer and the
@@ -24,7 +24,7 @@
 
 import * as ed from '@noble/ed25519'
 
-import { canonicalizeReceiptForSigning, type Receipt } from '@notched/protocol'
+import { canonicalizeReceiptForSigning, type Receipt } from '@mstamp/protocol'
 
 /** Algorithm identifier on the wire and in the database. */
 export const SIGNATURE_ALGORITHM = 'ed25519'
@@ -85,7 +85,7 @@ export function base64ToBytes(value: string): Uint8Array | null {
 }
 
 /**
- * Parse `NOTCHED_SIGNING_KEY`: base64 of the 32-byte seed.
+ * Parse `MSTAMP_SIGNING_KEY`: base64 of the 32-byte seed.
  *
  * @throws {SigningKeyError} with a message specific enough to fix without guessing.
  */
@@ -93,11 +93,11 @@ export function parseSigningSeed(base64: string): Uint8Array {
   const seed = base64ToBytes(base64)
 
   if (seed === null) {
-    throw new SigningKeyError('NOTCHED_SIGNING_KEY is not valid base64')
+    throw new SigningKeyError('MSTAMP_SIGNING_KEY is not valid base64')
   }
   if (seed.length !== SEED_BYTES) {
     throw new SigningKeyError(
-      `NOTCHED_SIGNING_KEY must decode to ${SEED_BYTES} bytes (a raw Ed25519 seed), got ${seed.length}`,
+      `MSTAMP_SIGNING_KEY must decode to ${SEED_BYTES} bytes (a raw Ed25519 seed), got ${seed.length}`,
     )
   }
 

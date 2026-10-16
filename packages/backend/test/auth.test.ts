@@ -6,9 +6,8 @@
  * no header, an empty header, an unknown key, and a key that resolves to a different
  * tenant than expected.
  *
- * `/v1/whoami` is the protected route used here. It is not a V1 endpoint; it exists so
- * "some other route" is a real thing to test against, and so the resolved tenant is
- * observable at all in Week 3a.
+ * `/v1/whoami` is the protected route used here. It exists so "some other route" is a
+ * real thing to test against, and so the resolved tenant is observable at all.
  */
 
 import type { Hono } from 'hono'

@@ -1,13 +1,13 @@
 /**
- * The Notched wire protocol.
+ * The mstamp wire protocol.
  *
  * These types are the contract between three separately-deployed pieces: the
- * buyer's in-process SDK, the Notched backend, and (later) an offline verifier
- * running on a third party's machine. They live in `@notched/protocol` rather
+ * buyer's in-process SDK, the mstamp backend, and (later) an offline verifier
+ * running on a third party's machine. They live in `@mstamp/protocol` rather
  * than in the SDK so that the backend cannot quietly develop a different idea of
  * what a receipt is.
  *
- * Field names and shapes here are taken verbatim from the V1 handoff. Where this
+ * Field names and shapes here are taken verbatim from the original spec. Where this
  * file deviates, it says so in a comment.
  */
 
@@ -20,7 +20,7 @@ export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue
 // ---------------------------------------------------------------------------
 
 /**
- * How much of the call was transmitted to the Notched backend.
+ * How much of the call was transmitted to the mstamp backend.
  *
  * Recorded on every receipt because it bounds what the receipt can prove: a
  * `hash-only` receipt can demonstrate the response changed, but not what it
@@ -33,7 +33,7 @@ export type Registration = 'full' | 'hash-only' | 'local'
  * Who vouches for the receipt.
  *
  * - `self`       written locally by the buyer's SDK; nobody countersigned it
- * - `platform`   signed by the Notched backend (V1 cloud mode)
+ * - `platform`   signed by the mstamp backend (V1 cloud mode)
  * - `bilateral`  seller co-signed (V2)
  * - `notarized`  hardware-attested (V3+)
  */
@@ -61,7 +61,7 @@ export type ValidationResult = {
 export type SchemaVersion = '1'
 
 /**
- * A Notched Receipt: the portable artefact.
+ * A mstamp Receipt: the portable artefact.
  *
  * Reserved V2 fields (`anomaly`, `buyerOverride`) are present and always `null`
  * in V1. They exist now so that a V2 backend can start populating them without
@@ -127,7 +127,7 @@ export type Receipt = {
    * `null` for a locally-written receipt (`attestation: "self"`), which has no
    * signature.
    *
-   * Amended from the handoff's `string` on 2026-10-13: "absent" is represented
+   * Amended from the original spec's `string` on 2026-10-13: "absent" is represented
    * explicitly rather than as a magic empty string, so a missing signature can
    * never be mistaken for a present-but-unparseable one.
    */
@@ -161,7 +161,7 @@ export type IngestEvent = {
   /**
    * Wall-clock duration of the observed call, in milliseconds.
    *
-   * Added after the V1 handoff was written. The receipt requires a `latencyMs`, and the
+   * Added after the original spec was written. The receipt requires a `latencyMs`, and the
    * event schema did not carry one, so the backend had no way to reconstruct it - it
    * would have had to invent a number or store zero, and latency is a scorecard input.
    */

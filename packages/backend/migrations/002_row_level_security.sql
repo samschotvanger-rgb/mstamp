@@ -11,7 +11,7 @@
 --
 --   1. **The app must not connect as the table owner.** Owners and superusers bypass
 --      RLS entirely, even with the policy in place. That is why this file creates a
---      separate `notched_app` role and grants it only the privileges it needs.
+--      separate `mstamp_app` role and grants it only the privileges it needs.
 --   2. **`app.tenant_id` must be set with SET LOCAL, never SET.** SET is
 --      session-scoped and would leak the previous request's tenant to the next
 --      request that reuses the same pooled connection. `db/client.ts` is the only
@@ -27,18 +27,18 @@
 -- already (and may lack CREATEROLE, in which case the DO block is a no-op).
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'notched_app') THEN
-    EXECUTE 'CREATE ROLE notched_app NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE';
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'mstamp_app') THEN
+    EXECUTE 'CREATE ROLE mstamp_app NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE';
   END IF;
 END
 $$;
 
-GRANT USAGE ON SCHEMA public TO notched_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON tenants, receipts, payloads TO notched_app;
+GRANT USAGE ON SCHEMA public TO mstamp_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON tenants, receipts, payloads TO mstamp_app;
 
 -- So tables added by later migrations are covered without remembering to grant.
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
-  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO notched_app;
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO mstamp_app;
 
 ALTER TABLE receipts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payloads ENABLE ROW LEVEL SECURITY;

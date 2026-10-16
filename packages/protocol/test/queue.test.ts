@@ -17,7 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_QUEUE_OPTIONS, TelemetryQueue, type DropEvent } from '../src/queue.js'
 
 describe('fail-open defaults', () => {
-  it('matches every parameter the handoff specifies', () => {
+  it('matches every parameter the original spec specifies', () => {
     expect(DEFAULT_QUEUE_OPTIONS).toEqual({
       telemetryTimeoutMs: 2000,
       maxQueueSize: 1000,

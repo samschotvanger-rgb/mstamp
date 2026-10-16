@@ -1,21 +1,22 @@
 {
-  "name": "@notched/backend",
+  "name": "@mstamp/backend",
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
   "type": "module",
-  "description": "Notched backend: Hono app, Postgres storage with row-level tenant isolation, and Ed25519 receipt signing.",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    }
+  "description": "mstamp backend: Hono app, Postgres storage with row-level tenant isolation, and Ed25519 receipt signing.",
+  "homepage": "https://github.com/samschotvanger-rgb/mstamp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/samschotvanger-rgb/mstamp.git",
+    "directory": "packages/backend"
   },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "files": [
-    "dist"
-  ],
+  "bugs": {
+    "url": "https://github.com/samschotvanger-rgb/mstamp/issues"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",
@@ -24,7 +25,7 @@
   },
   "dependencies": {
     "@hono/node-server": "2.1.5",
-    "@notched/protocol": "workspace:*",
+    "@mstamp/protocol": "workspace:*",
     "@noble/ed25519": "3.2.0",
     "hono": "^4.13.13",
     "pg": "^8.23.1"

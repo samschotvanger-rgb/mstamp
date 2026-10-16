@@ -33,7 +33,7 @@ import { redactBody, redactHeaders, redactUrl, type RedactionPolicy } from './re
 import type { Registration } from './types.js'
 
 /**
- * Default cap on how much of a response body is buffered (1 MB, per D-010).
+ * Default cap on how much of a response body is buffered (1 MB, per D-015).
  *
  * The cap exists because hashing raw bytes requires reading all of them: without a
  * limit, interception would buffer an unbounded response into memory on the

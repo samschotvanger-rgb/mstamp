@@ -6,8 +6,8 @@
  * before the auth middleware is public. Public: `/v1/health`, `/v1/keys` and
  * `/v1/keys/current`. Everything else under `/v1` requires an API key.
  *
- * Week 3b implements signing, ingest and the key endpoints. `/v1/receipts` and
- * `/v1/verify` are 3c; encryption and the purge job are still to come.
+ * Implemented: signing, ingest, the key endpoints, receipt retrieval, public
+ * verification, payload encryption and the purge job.
  */
 
 import { Hono } from 'hono'
@@ -47,7 +47,7 @@ export function createApp(config: AppConfig): Hono<AppEnv> {
   const reportError =
     config.onError ??
     ((error: unknown): void => {
-      console.error('[notched] unhandled error', error)
+      console.error('[mstamp] unhandled error', error)
     })
 
   // 1. Public routes FIRST - health, the published keys, and receipt verification. Each

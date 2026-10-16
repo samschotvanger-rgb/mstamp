@@ -3,7 +3,16 @@
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src",
-    "types": []
+
+    // `node` is required, not optional. It supplies two different things this
+    // package needs: the Node built-in modules `local-db.ts` imports
+    // (`node:fs`, `node:path`, `node:sqlite`), and the web-shaped globals the
+    // rest of the package relies on (`fetch`, `Request`/`Response`, `URL`,
+    // `TextEncoder`, `setTimeout`), which `@types/node` declares globally.
+    //
+    // With `types: []` every one of those is an unresolved name and the build
+    // cannot emit anything at all - which is why `dist/` never existed.
+    "types": ["node"]
   },
   "include": ["src/**/*.ts"]
 }

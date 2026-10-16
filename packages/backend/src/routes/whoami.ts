@@ -5,11 +5,11 @@ import type { AppEnv } from '../env.js'
 /**
  * `GET /v1/whoami` - requires a valid API key.
  *
- * Returns the tenant the key resolves to. Not one of the V1 endpoints; it exists for
- * two reasons, and both are load-bearing for Week 3a:
+ * Returns the tenant the key resolves to. It is not part of the receipt protocol; it
+ * exists for two reasons:
  *
  *   1. It is the way to verify the middleware resolves the RIGHT tenant, which is
- *      otherwise invisible until 3b/3c add routes that read data.
+ *      otherwise invisible until a route actually reads data.
  *   2. It gives the "any other route without a key returns 401" requirement something
  *      to point at.
  *

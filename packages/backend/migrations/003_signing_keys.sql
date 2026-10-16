@@ -18,4 +18,4 @@ CREATE TABLE IF NOT EXISTS signing_keys (
   published_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-GRANT SELECT, INSERT ON signing_keys TO notched_app;
+GRANT SELECT, INSERT ON signing_keys TO mstamp_app;

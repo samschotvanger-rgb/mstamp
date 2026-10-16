@@ -1,7 +1,7 @@
 /**
  * Validation tests.
  *
- * The handoff requires, for every built-in rule, a passing case, a failing case
+ * The original spec requires, for every built-in rule, a passing case, a failing case
  * and a missing-path case. That is the floor here, not the ceiling: a rule that
  * silently no-ops is a validation gap the buyer would never notice, so malformed
  * rule specs are tested to fail LOUDLY, and the whole surface is tested never to
@@ -34,7 +34,7 @@ describe('non-empty', () => {
     }
   })
 
-  it('fails for the four empty forms the handoff names', () => {
+  it('fails for the four empty forms the original spec names', () => {
     for (const value of [{}, [], null, '']) {
       const result = validate(value, at(['non-empty']))
       expect(result.passed, `value ${JSON.stringify(value)}`).toBe(false)
@@ -94,10 +94,10 @@ describe('min-length', () => {
     expect(validate({ items: [1, 2, 3] }, at(['min-length:items:2'])).passed).toBe(true)
   })
 
-  it('fails below the minimum, with the handoff\'s exact message shape', () => {
+  it('fails below the minimum, with the original spec\'s exact message shape', () => {
     const result = validate({ items: [] }, at(['min-length:items:1']))
     expect(result.passed).toBe(false)
-    // The handoff specifies this wording: "items: expected at least 1, got 0".
+    // The original spec specifies this wording: "items: expected at least 1, got 0".
     expect(result.errors[0]).toBe('items: expected at least 1, got 0')
   })
 
@@ -308,7 +308,7 @@ describe('zod schema integration', () => {
   })
 
   it('accepts any Zod-compatible validator, not just Zod', () => {
-    // Structural `SchemaLike`, so @notched/protocol needs no Zod dependency and
+    // Structural `SchemaLike`, so @mstamp/protocol needs no Zod dependency and
     // buyers can bring Valibot, ArkType or a hand-rolled validator.
     const handRolled = {
       safeParse(value: unknown) {
@@ -417,7 +417,7 @@ describe('non-JSON bodies', () => {
     expect(unvalidatedNonJson()).toEqual({ passed: null, rules: [NON_JSON_RULE], errors: [] })
   })
 
-  it('reports a rule id the handoff names exactly', () => {
+  it('reports a rule id the original spec names exactly', () => {
     expect(NON_JSON_RULE).toBe('unvalidated:non-json')
   })
 })

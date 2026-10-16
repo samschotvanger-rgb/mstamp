@@ -1,7 +1,7 @@
 /**
  * Cross-path canonicalization test.
  *
- * The V1 handoff requires a file that "canonicalizes the same payload in SDK and
+ * The original spec requires a file that "canonicalizes the same payload in SDK and
  * server code paths and asserts identical byte output", and requires it to pass
  * in CI before any release. It guards the most expensive class of bug in this
  * system: the SDK hashing one thing while the backend signs another, producing
@@ -18,7 +18,7 @@
  *   3. Verifier  replays the stored receipt using the raw `canonicalize` package
  *                and a hand-rolled removal of the two unsigned fields. This is
  *                exactly what a third party would write with no access to
- *                `@notched/protocol`, so it is the real interop risk.
+ *                `@mstamp/protocol`, so it is the real interop risk.
  *
  * Path 3 is the important one. It proves the protocol package's guard and
  * wrappers do not put any bytes on the wire that an outside implementation
@@ -142,7 +142,7 @@ function sdkReceipt(): Receipt {
 
 /**
  * The signing key the backend will use. In production this comes from deploy
- * config (`NOTCHED_SIGNING_KEY`); here it is fixed so the bytes are reproducible.
+ * config (`MSTAMP_SIGNING_KEY`); here it is fixed so the bytes are reproducible.
  */
 const SIGNING_KEY_ID = 'k_0001'
 
@@ -185,7 +185,7 @@ function backendReceiptFromWire(wire: string, signingKeyId: string | null = null
 }
 
 // ---------------------------------------------------------------------------
-// Path 3: an independent verifier with no knowledge of @notched/protocol
+// Path 3: an independent verifier with no knowledge of @mstamp/protocol
 // ---------------------------------------------------------------------------
 
 /**
@@ -204,7 +204,7 @@ const rawCanonicalize = (value: unknown): string => {
  * Reconstruct the signed bytes the way a third-party verifier would: parse the
  * stored receipt, drop the two unsigned fields, serialize with the raw library.
  *
- * No use of `@notched/protocol` anywhere in this function - that is the point.
+ * No use of `@mstamp/protocol` anywhere in this function - that is the point.
  */
 function externalVerifierSigningBytes(storedReceiptJson: string): string {
   const parsed = JSON.parse(storedReceiptJson) as Record<string, unknown>

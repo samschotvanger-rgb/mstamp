@@ -6,7 +6,7 @@
  * awaits nothing and never throws, and every failure mode ends in a dropped event
  * rather than back-pressure.
  *
- * The seven parameters come straight from the V1 handoff:
+ * The seven parameters come straight from the original spec:
  *
  * | Parameter                  | Value  | Purpose                                  |
  * | -------------------------- | ------ | ---------------------------------------- |
@@ -20,7 +20,7 @@
  *
  * Two decisions worth stating explicitly:
  *
- *   - **A failed batch is DROPPED, not requeued.** The handoff says "on timeout,
+ *   - **A failed batch is DROPPED, not requeued.** The original spec says "on timeout,
  *     failure, or circuit-break, drop and log locally... if the backend is down,
  *     telemetry is lost." Requeueing would convert a backend outage into unbounded
  *     memory growth and repeated retries of stale events.
@@ -103,7 +103,7 @@ export type QueueStats = {
   readonly size: number
 }
 
-/** The seven handoff parameters. `batchSize` is separate because it is derived. */
+/** The seven original spec parameters. `batchSize` is separate because it is derived. */
 export const DEFAULT_QUEUE_OPTIONS = {
   telemetryTimeoutMs: 2000,
   maxQueueSize: 1000,

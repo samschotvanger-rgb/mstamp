@@ -9,7 +9,7 @@
  * It is still deterministic, so signatures and receipts are reproducible.
  */
 
-import type { IngestEvent } from '@notched/protocol'
+import type { IngestEvent } from '@mstamp/protocol'
 
 import { parseSigningSeed, signingKeyFromSeed, type SigningKey } from '../../src/crypto/sign.js'
 

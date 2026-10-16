@@ -19,11 +19,11 @@ import {
   testSigningKey,
 } from './helpers/keys.js'
 
-const DATABASE_URL = 'postgres://notched:secret@localhost:5432/notched'
+const DATABASE_URL = 'postgres://mstamp:secret@localhost:5432/mstamp'
 
 describe('loadServiceConfig', () => {
   it('loads a valid configuration', async () => {
-    const config = await loadServiceConfig({ DATABASE_URL, NOTCHED_SIGNING_KEY: TEST_SEED_BASE64, NOTCHED_MASTER_KEY: TEST_MASTER_KEY_BASE64 })
+    const config = await loadServiceConfig({ DATABASE_URL, MSTAMP_SIGNING_KEY: TEST_SEED_BASE64, MSTAMP_MASTER_KEY: TEST_MASTER_KEY_BASE64 })
 
     expect(config.databaseUrl).toBe(DATABASE_URL)
     expect(config.signingKey.keyId).toBe(DEFAULT_KEY_ID)
@@ -32,7 +32,7 @@ describe('loadServiceConfig', () => {
   })
 
   it('derives the same public key as signingKeyFromSeed', async () => {
-    const config = await loadServiceConfig({ DATABASE_URL, NOTCHED_SIGNING_KEY: TEST_SEED_BASE64, NOTCHED_MASTER_KEY: TEST_MASTER_KEY_BASE64 })
+    const config = await loadServiceConfig({ DATABASE_URL, MSTAMP_SIGNING_KEY: TEST_SEED_BASE64, MSTAMP_MASTER_KEY: TEST_MASTER_KEY_BASE64 })
     const expected = await testSigningKey(DEFAULT_KEY_ID)
 
     expect(publicKeyBase64(config.signingKey)).toBe(publicKeyBase64(expected))
@@ -44,15 +44,15 @@ describe('loadServiceConfig', () => {
 
   it('refuses to start when the signing key is missing', async () => {
     await expect(loadServiceConfig({ DATABASE_URL })).rejects.toBeInstanceOf(SigningKeyError)
-    await expect(loadServiceConfig({ DATABASE_URL })).rejects.toThrow(/NOTCHED_SIGNING_KEY is required/)
+    await expect(loadServiceConfig({ DATABASE_URL })).rejects.toThrow(/MSTAMP_SIGNING_KEY is required/)
   })
 
   it('refuses to start when the signing key is blank', async () => {
     for (const value of ['', '   ', '\t']) {
       await expect(
-        loadServiceConfig({ DATABASE_URL, NOTCHED_SIGNING_KEY: value }),
+        loadServiceConfig({ DATABASE_URL, MSTAMP_SIGNING_KEY: value }),
         `value ${JSON.stringify(value)}`,
-      ).rejects.toThrow(/NOTCHED_SIGNING_KEY is required/)
+      ).rejects.toThrow(/MSTAMP_SIGNING_KEY is required/)
     }
   })
 
@@ -66,7 +66,7 @@ describe('loadServiceConfig', () => {
 
     for (const [label, value] of cases) {
       await expect(
-        loadServiceConfig({ DATABASE_URL, NOTCHED_SIGNING_KEY: value }),
+        loadServiceConfig({ DATABASE_URL, MSTAMP_SIGNING_KEY: value }),
         label,
       ).rejects.toBeInstanceOf(SigningKeyError)
     }
@@ -77,17 +77,17 @@ describe('loadServiceConfig', () => {
     // public key, a passphrase, or a truncated string.
     const sixteen = Buffer.from(new Uint8Array(16).fill(7)).toString('base64')
 
-    await expect(loadServiceConfig({ DATABASE_URL, NOTCHED_SIGNING_KEY: sixteen })).rejects.toThrow(/32 bytes/)
+    await expect(loadServiceConfig({ DATABASE_URL, MSTAMP_SIGNING_KEY: sixteen })).rejects.toThrow(/32 bytes/)
   })
 
   it('requires DATABASE_URL', async () => {
-    await expect(loadServiceConfig({ NOTCHED_SIGNING_KEY: TEST_SEED_BASE64, NOTCHED_MASTER_KEY: TEST_MASTER_KEY_BASE64 })).rejects.toThrow(/DATABASE_URL is required/)
+    await expect(loadServiceConfig({ MSTAMP_SIGNING_KEY: TEST_SEED_BASE64, MSTAMP_MASTER_KEY: TEST_MASTER_KEY_BASE64 })).rejects.toThrow(/DATABASE_URL is required/)
   })
 
   it('rejects a PORT that is not a valid port', async () => {
     for (const port of ['0', '70000', 'abc', '80.5', '-1']) {
       await expect(
-        loadServiceConfig({ DATABASE_URL, NOTCHED_SIGNING_KEY: TEST_SEED_BASE64, NOTCHED_MASTER_KEY: TEST_MASTER_KEY_BASE64, PORT: port }),
+        loadServiceConfig({ DATABASE_URL, MSTAMP_SIGNING_KEY: TEST_SEED_BASE64, MSTAMP_MASTER_KEY: TEST_MASTER_KEY_BASE64, PORT: port }),
         `PORT ${port}`,
       ).rejects.toThrow(/PORT must be an integer/)
     }
@@ -97,11 +97,11 @@ describe('loadServiceConfig', () => {
   // Tolerance that is safe
   // -------------------------------------------------------------------------
 
-  it('honours NOTCHED_SIGNING_KEY_ID', async () => {
+  it('honours MSTAMP_SIGNING_KEY_ID', async () => {
     const config = await loadServiceConfig({
       DATABASE_URL,
-      NOTCHED_SIGNING_KEY: TEST_SEED_BASE64, NOTCHED_MASTER_KEY: TEST_MASTER_KEY_BASE64,
-      NOTCHED_SIGNING_KEY_ID: TEST_KEY_ID,
+      MSTAMP_SIGNING_KEY: TEST_SEED_BASE64, MSTAMP_MASTER_KEY: TEST_MASTER_KEY_BASE64,
+      MSTAMP_SIGNING_KEY_ID: TEST_KEY_ID,
     })
 
     expect(config.signingKey.keyId).toBe(TEST_KEY_ID)
@@ -110,39 +110,39 @@ describe('loadServiceConfig', () => {
   it('falls back to the default key id when the override is blank', async () => {
     const config = await loadServiceConfig({
       DATABASE_URL,
-      NOTCHED_SIGNING_KEY: TEST_SEED_BASE64, NOTCHED_MASTER_KEY: TEST_MASTER_KEY_BASE64,
-      NOTCHED_SIGNING_KEY_ID: '   ',
+      MSTAMP_SIGNING_KEY: TEST_SEED_BASE64, MSTAMP_MASTER_KEY: TEST_MASTER_KEY_BASE64,
+      MSTAMP_SIGNING_KEY_ID: '   ',
     })
 
     expect(config.signingKey.keyId).toBe(DEFAULT_KEY_ID)
   })
 
   it('accepts base64url, which operators paste just as often', async () => {
-    const standard = await loadServiceConfig({ DATABASE_URL, NOTCHED_SIGNING_KEY: TEST_SEED_BASE64, NOTCHED_MASTER_KEY: TEST_MASTER_KEY_BASE64 })
+    const standard = await loadServiceConfig({ DATABASE_URL, MSTAMP_SIGNING_KEY: TEST_SEED_BASE64, MSTAMP_MASTER_KEY: TEST_MASTER_KEY_BASE64 })
     const base64url = TEST_SEED_BASE64.replace(/\+/g, '-').replace(/\//g, '_')
-    const fromUrlSafe = await loadServiceConfig({ DATABASE_URL, NOTCHED_SIGNING_KEY: base64url, NOTCHED_MASTER_KEY: TEST_MASTER_KEY_BASE64 })
+    const fromUrlSafe = await loadServiceConfig({ DATABASE_URL, MSTAMP_SIGNING_KEY: base64url, MSTAMP_MASTER_KEY: TEST_MASTER_KEY_BASE64 })
 
     expect(publicKeyBase64(fromUrlSafe.signingKey)).toBe(publicKeyBase64(standard.signingKey))
   })
 
   it('tolerates surrounding whitespace, which shells and dotenv love to add', async () => {
-    const config = await loadServiceConfig({ DATABASE_URL, NOTCHED_SIGNING_KEY: `  ${TEST_SEED_BASE64}\n`, NOTCHED_MASTER_KEY: TEST_MASTER_KEY_BASE64 })
+    const config = await loadServiceConfig({ DATABASE_URL, MSTAMP_SIGNING_KEY: `  ${TEST_SEED_BASE64}\n`, MSTAMP_MASTER_KEY: TEST_MASTER_KEY_BASE64 })
     const expected = await testSigningKey(DEFAULT_KEY_ID)
 
     expect(publicKeyBase64(config.signingKey)).toBe(publicKeyBase64(expected))
   })
 
   it('parses an explicit PORT', async () => {
-    const config = await loadServiceConfig({ DATABASE_URL, NOTCHED_SIGNING_KEY: TEST_SEED_BASE64, NOTCHED_MASTER_KEY: TEST_MASTER_KEY_BASE64, PORT: '8081' })
+    const config = await loadServiceConfig({ DATABASE_URL, MSTAMP_SIGNING_KEY: TEST_SEED_BASE64, MSTAMP_MASTER_KEY: TEST_MASTER_KEY_BASE64, PORT: '8081' })
 
     expect(config.port).toBe(8081)
   })
 
   it('records NODE_ENV, defaulting to development', async () => {
-    const dev = await loadServiceConfig({ DATABASE_URL, NOTCHED_SIGNING_KEY: TEST_SEED_BASE64, NOTCHED_MASTER_KEY: TEST_MASTER_KEY_BASE64 })
+    const dev = await loadServiceConfig({ DATABASE_URL, MSTAMP_SIGNING_KEY: TEST_SEED_BASE64, MSTAMP_MASTER_KEY: TEST_MASTER_KEY_BASE64 })
     const prod = await loadServiceConfig({
       DATABASE_URL,
-      NOTCHED_SIGNING_KEY: TEST_SEED_BASE64, NOTCHED_MASTER_KEY: TEST_MASTER_KEY_BASE64,
+      MSTAMP_SIGNING_KEY: TEST_SEED_BASE64, MSTAMP_MASTER_KEY: TEST_MASTER_KEY_BASE64,
       NODE_ENV: 'production',
     })
 
@@ -154,23 +154,23 @@ describe('loadServiceConfig', () => {
   // The payload encryption master key
   // -------------------------------------------------------------------------
 
-  it('refuses to start without NOTCHED_MASTER_KEY, in any mode', async () => {
+  it('refuses to start without MSTAMP_MASTER_KEY, in any mode', async () => {
     // Required in every mode, including a local-only deployment. A service that started
     // without it would accept a `full`-registration event and then fail to store its
     // preview, which surfaces as a per-event `rejected` count rather than as the
     // configuration mistake it is.
-    const env = { DATABASE_URL, NOTCHED_SIGNING_KEY: TEST_SEED_BASE64 }
+    const env = { DATABASE_URL, MSTAMP_SIGNING_KEY: TEST_SEED_BASE64 }
 
     await expect(loadServiceConfig(env)).rejects.toBeInstanceOf(MasterKeyError)
-    await expect(loadServiceConfig(env)).rejects.toThrow(/NOTCHED_MASTER_KEY is required/)
+    await expect(loadServiceConfig(env)).rejects.toThrow(/MSTAMP_MASTER_KEY is required/)
   })
 
   it('refuses to start when the master key is blank', async () => {
     for (const value of ['', '   ', '\t']) {
       await expect(
-        loadServiceConfig({ DATABASE_URL, NOTCHED_SIGNING_KEY: TEST_SEED_BASE64, NOTCHED_MASTER_KEY: value }),
+        loadServiceConfig({ DATABASE_URL, MSTAMP_SIGNING_KEY: TEST_SEED_BASE64, MSTAMP_MASTER_KEY: value }),
         `value ${JSON.stringify(value)}`,
-      ).rejects.toThrow(/NOTCHED_MASTER_KEY is required/)
+      ).rejects.toThrow(/MSTAMP_MASTER_KEY is required/)
     }
   })
 
@@ -183,7 +183,7 @@ describe('loadServiceConfig', () => {
 
     for (const [label, value] of cases) {
       await expect(
-        loadServiceConfig({ DATABASE_URL, NOTCHED_SIGNING_KEY: TEST_SEED_BASE64, NOTCHED_MASTER_KEY: value }),
+        loadServiceConfig({ DATABASE_URL, MSTAMP_SIGNING_KEY: TEST_SEED_BASE64, MSTAMP_MASTER_KEY: value }),
         label,
       ).rejects.toBeInstanceOf(MasterKeyError)
     }
@@ -192,8 +192,8 @@ describe('loadServiceConfig', () => {
   it('reads the master key as 32 raw bytes', async () => {
     const config = await loadServiceConfig({
       DATABASE_URL,
-      NOTCHED_SIGNING_KEY: TEST_SEED_BASE64,
-      NOTCHED_MASTER_KEY: TEST_MASTER_KEY_BASE64,
+      MSTAMP_SIGNING_KEY: TEST_SEED_BASE64,
+      MSTAMP_MASTER_KEY: TEST_MASTER_KEY_BASE64,
     })
 
     expect(config.masterKey).toHaveLength(32)

@@ -1,10 +1,22 @@
 {
-  "name": "@notched/protocol",
+  "name": "@mstamp/protocol",
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
   "type": "module",
-  "description": "Shared Notched protocol: receipt types, RFC 8785 canonicalization, SHA-256 hashing, redaction, response validation and the fail-open telemetry queue. Imported by the SDK, the CLI, and the backend so those three can never drift.",
+  "description": "mstamp protocol: receipt types, RFC 8785 canonicalization, SHA-256 hashing, redaction, response validation, the fetch-interception client, and the fail-open telemetry queue.",
+  "homepage": "https://github.com/samschotvanger-rgb/mstamp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/samschotvanger-rgb/mstamp.git",
+    "directory": "packages/protocol"
+  },
+  "bugs": {
+    "url": "https://github.com/samschotvanger-rgb/mstamp/issues"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

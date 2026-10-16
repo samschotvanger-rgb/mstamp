@@ -53,7 +53,7 @@ export class IngestProtocolError extends Error {
 }
 
 export type CloudIngestOptions = {
-  /** Host only, e.g. `https://api.notched.dev`. The path is appended. */
+  /** Host only, e.g. `https://api.mstamp.dev`. The path is appended. */
   endpoint: string
   apiKey: string
   /** Injected `fetch`, for tests and for non-global-fetch runtimes. */

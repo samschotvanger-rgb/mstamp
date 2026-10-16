@@ -1,12 +1,12 @@
 -- 001_init.sql - core tables.
 --
--- Column names and types follow the V1 handoff's Postgres schema, with two
+-- Column names and types follow the original spec's Postgres schema, with two
 -- deliberate differences, both ruled on 2026-10-13:
 --
---   1. `schema_version` and `key_id` are added. The handoff's schema was written
+--   1. `schema_version` and `key_id` are added. The original spec's schema was written
 --      before those fields existed in the Receipt type; see docs/receipt-schema.md.
 --
---   2. `server_signature` and `signed_at` are NULLABLE. The handoff had
+--   2. `server_signature` and `signed_at` are NULLABLE. The original spec had
 --      `signed_at TIMESTAMPTZ NOT NULL DEFAULT now()`, but a receipt is INSERTed
 --      before it is signed and UPDATEd in place afterwards. A NOT NULL default would
 --      have recorded a signing time that was really just an ingest time.

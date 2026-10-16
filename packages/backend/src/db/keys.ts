@@ -55,7 +55,7 @@ function assertSameKey(keyId: string, stored: string, expected: string): void {
     throw new SigningKeyConflictError(
       `signing key id ${JSON.stringify(keyId)} is already published with a different public key. ` +
         'Reusing a key id for a new key would make every receipt signed with it unverifiable. ' +
-        'Generate a new key id (NOTCHED_SIGNING_KEY_ID) instead.',
+        'Generate a new key id (MSTAMP_SIGNING_KEY_ID) instead.',
     )
   }
 }

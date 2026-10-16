@@ -3,10 +3,17 @@
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src",
-    "types": ["node"],
-    "paths": {
-      "@notched/protocol": ["../protocol/src/index.ts"]
-    }
+
+    // No `paths` mapping here, deliberately - unlike `tsconfig.json`, which maps
+    // `@mstamp/protocol` to its source so typechecking sees edits without a build.
+    //
+    // A build that resolved the import to `../protocol/src/index.ts` would pull
+    // those files into this program, and they live outside `rootDir`, so tsc
+    // rejects the whole emit with TS6059. Leaving the mapping out lets resolution
+    // fall through to node_modules, where the workspace symlink points at
+    // protocol's built `dist/index.d.ts`. pnpm builds workspace projects in
+    // dependency order, so that file already exists by the time this runs.
+    "types": ["node"]
   },
   "include": ["src/**/*.ts"]
 }

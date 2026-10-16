@@ -9,7 +9,7 @@
  * Everything here runs inside a `withTenant` transaction, so row-level security applies.
  */
 
-import type { Attestation, Receipt, Registration, SchemaVersion, ValidationResult } from '@notched/protocol'
+import type { Attestation, Receipt, Registration, SchemaVersion, ValidationResult } from '@mstamp/protocol'
 
 import { queryRows, withConnection, type DbConnection, type DbPool } from './client.js'
 
@@ -137,7 +137,7 @@ export async function selectReceiptForVerification(pool: DbPool, receiptId: stri
   return withConnection(pool, async (connection) => {
     const rows = await queryRows<Record<string, unknown>>(
       connection,
-      'SELECT * FROM notched_get_receipt_for_verification($1)',
+      'SELECT * FROM mstamp_get_receipt_for_verification($1)',
       [receiptId],
     )
     const row = rows[0]

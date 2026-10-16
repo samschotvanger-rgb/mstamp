@@ -5,6 +5,15 @@ node_modules/
 dist/
 *.tsbuildinfo
 
+# Compiled output must never land beside its sources. tsc emits to dist/ (see each
+# package's tsconfig.build.json), but a misconfigured rootDir/outDir drops .js and
+# .d.ts next to the .ts files instead. That happened once, through a `paths`
+# mapping that pulled one package's source into another package's program.
+packages/*/src/**/*.js
+packages/*/src/**/*.d.ts
+packages/*/src/**/*.js.map
+packages/*/src/**/*.d.ts.map
+
 # Test output
 coverage/
 
@@ -25,6 +34,9 @@ coverage/
 !.env.example
 *.pem
 *.key
+
+# SDK local receipt store (DEFAULT_LOCAL_DB_PATH in protocol/src/telemetry.ts)
+.mstamp/
 
 # OS / editor
 .DS_Store

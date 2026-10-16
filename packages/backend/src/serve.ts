@@ -29,7 +29,7 @@ export type RunningService = {
 /**
  * Start the service.
  *
- * @throws {SigningKeyError} when `NOTCHED_SIGNING_KEY` is missing or malformed.
+ * @throws {SigningKeyError} when `MSTAMP_SIGNING_KEY` is missing or malformed.
  * @throws {SigningKeyConflictError} when the configured key id is already published
  * under a different public key.
  */
@@ -69,7 +69,7 @@ const isDirectRun = entry !== undefined && import.meta.url === pathToFileURL(ent
 
 if (isDirectRun) {
   startService().catch((error: unknown) => {
-    console.error('[notched] failed to start:', error instanceof Error ? error.message : error)
+    console.error('[mstamp] failed to start:', error instanceof Error ? error.message : error)
     process.exitCode = 1
   })
 }

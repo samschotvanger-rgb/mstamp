@@ -1,5 +1,5 @@
 /**
- * `@notched/protocol` - the shared Notched protocol.
+ * `@mstamp/protocol` - the shared mstamp protocol.
  *
  * Imported by the SDK, the CLI and the backend. Keeping types, canonicalization,
  * hashing, redaction, the signing payload, response validation, the fail-open queue,

@@ -1,7 +1,7 @@
 /**
  * Row-level tenant isolation.
  *
- * These tests are only meaningful because the harness switches to the `notched_app`
+ * These tests are only meaningful because the harness switches to the `mstamp_app`
  * role after migrating. A table owner and a superuser both bypass RLS entirely, so
  * running these assertions as the migration user would pass no matter what the policy
  * said - which is the classic way an RLS test ends up proving nothing.
@@ -228,7 +228,7 @@ describe('row-level tenant isolation', () => {
       `SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user`,
     )
 
-    expect(current[0]?.current_user).toBe('notched_app')
+    expect(current[0]?.current_user).toBe('mstamp_app')
     // If either of these were true, every assertion above would pass vacuously.
     expect(attributes[0]?.rolsuper).toBe(false)
     expect(attributes[0]?.rolbypassrls).toBe(false)

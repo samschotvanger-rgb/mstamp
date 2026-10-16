@@ -1,15 +1,24 @@
 {
-  "name": "notched",
+  "name": "mstamp",
   "version": "0.0.0",
   "private": true,
   "description": "Cryptographic evidence layer for external API calls made by AI agents.",
   "type": "module",
   "license": "MIT",
+  "author": "samschotvanger-rgb",
+  "homepage": "https://github.com/samschotvanger-rgb/mstamp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/samschotvanger-rgb/mstamp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/samschotvanger-rgb/mstamp/issues"
+  },
   "engines": {
     "node": ">=22.0.0"
   },
   "scripts": {
-    "test": "pnpm --filter @notched/protocol test && pnpm --filter @notched/backend test && vitest run",
+    "test": "pnpm --filter @mstamp/protocol test && pnpm --filter @mstamp/backend test && vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json && pnpm -r typecheck",
     "build": "pnpm -r build"
