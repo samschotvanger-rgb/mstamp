@@ -35,11 +35,11 @@ const observedFetch = telemetry.instrumentFetch({ provider: 'scraper-x', operati
 
 const response = await observedFetch('https://scraper-x.example/v1/items?page=1')
 const items = await response.json()   // still readable — interception does not consume the body
-
-telemetry.close()
 ```
 
 Receipts land in `.mstamp/receipts.db` by default.
+
+**One timing detail, and it bites.** The receipt is written on a background tick once the response body has been read. `close()` is synchronous and does not wait for that write, so calling it in the same tick discards the receipt silently. Let the process idle, or close at shutdown rather than after each request.
 
 ### Cloud mode — requires a running backend
 
@@ -53,7 +53,6 @@ const telemetry = new Telemetry({
 })
 
 await telemetry.flush()   // await the cloud POST; never rejects
-telemetry.close()
 ```
 
 There is deliberately no default `endpoint`. Where your telemetry goes is your decision, not a library default.

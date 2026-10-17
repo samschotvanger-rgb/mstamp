@@ -10,9 +10,17 @@ mstamp runs inside the caller's own process. It wraps `fetch`, captures the requ
 
 ## Status
 
-Early, pre-release work. Nothing is published to npm: `@mstamp/protocol` and `@mstamp/backend` are `private: true` workspace packages, and there is no supported install path for them yet. The wire format is not frozen either. `schemaVersion` is `"1"` and the field set is documented normatively, but expect breaking changes before a first release. A change that alters the signed field set is a protocol-version decision, never a refactor, and the pinned digests below exist to make that failure loud instead of silent.
+Early, pre-release work, but installable. `@mstamp/protocol` is published:
 
-What exists today: the library (RFC 8785 canonicalization, SHA-256 hashing, redaction, response validation, non-mutating `fetch` interception, a fail-open queue, a local SQLite receipt store, and the cloud transport) and the backend (Hono app, ingest, Ed25519 signing, public key publication, tenant-isolated Postgres storage, public verification, and a payload retention job). What does not exist yet: published packages, a frozen wire guarantee, and an external cryptographic review of the canonicalization and signing path. Treat both halves as work in progress.
+```sh
+npm install @mstamp/protocol
+```
+
+`@mstamp/backend` is **not** published. It is a service rather than a library, so it stays `private: true` and runs from this repository.
+
+The wire format is not frozen. `schemaVersion` is `"1"` and the field set is documented normatively, but expect breaking changes before a first release. A change that alters the signed field set is a protocol-version decision, never a refactor, and the pinned digests below exist to make that failure loud instead of silent.
+
+What exists today: the library (RFC 8785 canonicalization, SHA-256 hashing, redaction, response validation, non-mutating `fetch` interception, a fail-open queue, a local SQLite receipt store, and the cloud transport) and the backend (Hono app, ingest, Ed25519 signing, public key publication, tenant-isolated Postgres storage, public verification, and a payload retention job). What does not exist yet: a frozen wire guarantee and an external cryptographic review of the canonicalization and signing path. Treat both halves as work in progress.
 
 ## What mstamp is not
 
@@ -50,8 +58,9 @@ Wherever a source comment or this README cites a numbered decision such as `D-01
 
 ## Requirements
 
-- **Node.js 22 or newer.** The selected RFC 8785 implementation requires it.
-- **pnpm.** `pnpm-workspace.yaml` sets `minimumReleaseAge: 1440`, a 24-hour soak window: pnpm refuses to adopt a package version published less recently than that. It is a floor, not a strong control, and it is intended to be raised.
+- **Node.js 22 or newer.** The selected RFC 8785 implementation requires it, and the local receipt store uses `node:sqlite`.
+- **ESM only.** The package is `"type": "module"`. Import it from an `.mjs` file or a project with `"type": "module"`. `require()` also works on Node 22.12 and later.
+- **pnpm, to work on this repository.** `pnpm-workspace.yaml` sets `minimumReleaseAge: 1440`, a 24-hour soak window: pnpm refuses to adopt a package version published less recently than that. It is a floor, not a strong control, and is intended to be raised. Installing the *library* needs only npm.
 
 ## Commands
 
@@ -73,15 +82,18 @@ pnpm --filter @mstamp/protocol exec vitest run test/bakeoff.test.ts
 
 ## Quickstart
 
-```ts
+```sh
+npm install @mstamp/protocol
+```
+
+Local mode needs no server: receipts go to a local SQLite file and nothing leaves the process.
+
+```js
 import { Telemetry } from '@mstamp/protocol'
 
 const telemetry = new Telemetry({
-  mode: 'cloud',                                // 'local' keeps everything in-process
-  apiKey: '<tenant API key>',                   // required in cloud mode
-  endpoint: 'https://ingest.example.com',       // required in cloud mode, no default
-  defaultRegistration: 'hash-only',             // 'full' also sends redacted previews
-  registrationPolicy: { 'scraper-x': 'full' },  // per-provider override
+  mode: 'local',
+  defaultRegistration: 'hash-only',
   sdkVersion: '0.1.0',
 })
 
@@ -89,16 +101,34 @@ const telemetry = new Telemetry({
 // untouched: the same Response object comes back, still fully readable.
 const observedFetch = telemetry.instrumentFetch({ provider: 'scraper-x', operation: 'extract' })
 
-const response = await observedFetch('https://scraper-x.example/v1/items?page=1')
+const response = await observedFetch('https://your-api.example/items?page=1')
 const items = await response.json()
+```
+
+Replace that URL with one you can actually call; the receipt lands in `.mstamp/receipts.db`.
+
+**One timing detail, and it bites.** The receipt is written on a background tick once the response body has been read. `close()` is synchronous and does not wait for that write, so calling it in the same tick discards the receipt silently. Let the process idle, or close at shutdown rather than after each request.
+
+Those receipts are unsigned (`attestation: "self"`). To get a **signed** receipt, point the same code at a running backend instead:
+
+```js
+const telemetry = new Telemetry({
+  mode: 'cloud',
+  apiKey: process.env.MSTAMP_API_KEY,           // required in cloud mode
+  endpoint: 'https://ingest.example.com',       // required in cloud mode, no default
+  defaultRegistration: 'hash-only',             // 'full' also sends redacted previews
+  registrationPolicy: { 'scraper-x': 'full' },  // per-provider override
+  sdkVersion: '0.1.0',
+})
+
+// ...the same instrumentFetch call as above...
 
 await telemetry.flush()   // await the cloud POST; never rejects
-telemetry.close()         // stop the queue, close the local store; never throws
 ```
 
 A single call can be recorded without building a wrapper, with per-call rules:
 
-```ts
+```js
 await telemetry.wrap(fetch, url, init, {
   provider: 'scraper-x',
   operation: 'extract',
