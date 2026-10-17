@@ -1,9 +1,19 @@
 {
   "name": "@mstamp/protocol",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "MIT",
   "type": "module",
   "description": "mstamp protocol: receipt types, RFC 8785 canonicalization, SHA-256 hashing, redaction, response validation, the fetch-interception client, and the fail-open telemetry queue.",
+  "keywords": [
+    "typescript",
+    "ed25519",
+    "rfc8785",
+    "canonicalization",
+    "signing",
+    "receipts",
+    "audit",
+    "crypto"
+  ],
   "homepage": "https://github.com/samschotvanger-rgb/mstamp#readme",
   "repository": {
     "type": "git",
