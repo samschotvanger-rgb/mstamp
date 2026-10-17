@@ -4,6 +4,8 @@ node_modules/
 # Build output
 dist/
 *.tsbuildinfo
+# Tarball left behind by `npm pack` / `pnpm publish`
+*.tgz
 
 # Compiled output must never land beside its sources. tsc emits to dist/ (see each
 # package's tsconfig.build.json), but a misconfigured rootDir/outDir drops .js and

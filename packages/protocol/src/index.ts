@@ -1,10 +1,10 @@
 /**
  * `@mstamp/protocol` - the shared mstamp protocol.
  *
- * Imported by the SDK, the CLI and the backend. Keeping types, canonicalization,
+ * Used by the client library and the backend. Keeping types, canonicalization,
  * hashing, redaction, the signing payload, response validation, the fail-open queue,
  * `fetch` interception, local storage, cloud ingestion and the `Telemetry` entry
- * point in one package is what stops those three from drifting apart.
+ * point in one package is what stops the signer and a verifier from drifting apart.
  */
 
 export * from './types.js'

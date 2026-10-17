@@ -1,7 +1,6 @@
 {
   "name": "@mstamp/protocol",
   "version": "0.1.0",
-  "private": true,
   "license": "MIT",
   "type": "module",
   "description": "mstamp protocol: receipt types, RFC 8785 canonicalization, SHA-256 hashing, redaction, response validation, the fetch-interception client, and the fail-open telemetry queue.",
@@ -16,6 +15,9 @@
   },
   "engines": {
     "node": ">=22.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "exports": {
     ".": {
