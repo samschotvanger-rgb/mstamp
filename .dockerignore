@@ -1,0 +1,36 @@
+# Keep the image build context small and cache-friendly.
+
+node_modules
+**/node_modules
+
+# Build output is produced inside the image, never copied in.
+dist
+**/dist
+*.tsbuildinfo
+
+# Local state and caches
+.pnpm-store
+.pnpm-cache
+.npm-cache
+.mstamp
+.tmp
+.vendor-tmp
+
+# Test and tooling output
+coverage
+
+# Never ship secrets, even by accident: .dockerignore is the last line of defence
+# between a stray .env and a public image layer.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# VCS and editors
+.git
+.gitattributes
+.github
+.vscode
+.idea
+*.log

@@ -19,6 +19,10 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/serve.js",
+    "migrate": "node dist/bin/migrate.js",
+    "issue-key": "node dist/bin/issue-key.js",
+    "purge": "node dist/bin/purge.js",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest"

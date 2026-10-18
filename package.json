@@ -4,6 +4,7 @@
   "private": true,
   "description": "Cryptographic evidence layer for external API calls made by AI agents.",
   "type": "module",
+  "packageManager": "pnpm@11.7.0",
   "license": "MIT",
   "author": "samschotvanger-rgb",
   "homepage": "https://github.com/samschotvanger-rgb/mstamp#readme",

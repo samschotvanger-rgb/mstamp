@@ -30,6 +30,8 @@ That is deliberate. Operating a signer means holding an Ed25519 key whose entire
 
 **So, plainly:** the npm package gives you a local audit log and the constraint layer — canonicalization, hashing, redaction, validation — with no third-party attestation. A signed receipt needs a signer that is *not you*, and there isn't one running. A notary you host yourself proves nothing a local receipt doesn't, because you hold the key.
 
+The backend is **deployable**. [docs/deploy.md](docs/deploy.md) is a runbook: migrate a database, issue an API key, start the service, schedule the retention job. Deployable is not deployed, though — there is no hosted instance, and that is on purpose rather than an oversight.
+
 **If you want signed receipts**, [open an issue](https://github.com/samschotvanger-rgb/mstamp/issues) and describe what you need. Standing up the notary is the work that follows, not the work that is done.
 
 ## What mstamp is not
@@ -56,7 +58,8 @@ mstamp/
 ├── docs/
 │   ├── receipt-schema.md             # normative field set + verification recipe
 │   ├── canonicalization-decision.md  # why the canonicalizer was chosen
-│   └── decisions-public.md           # the decisions that constrain the protocol
+│   ├── decisions-public.md           # the decisions that constrain the protocol
+│   └── deploy.md                     # runbook: migrate, issue a key, start, cron
 ├── scripts/
 │   └── test-canonicalization.ts      # independent verifier path, cross-checked
 └── package.json

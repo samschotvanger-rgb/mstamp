@@ -52,7 +52,10 @@ export async function startService(env: ServerEnv = process.env): Promise<Runnin
     masterKey: config.masterKey,
     version: config.version,
   })
-  const server = serve({ fetch: app.fetch, port: config.port })
+  // Bind every interface. A container port bound only to loopback is unreachable from
+  // outside, which presents as a deploy that starts cleanly and never answers.
+  const hostname = env['HOST']?.trim() || '0.0.0.0'
+  const server = serve({ fetch: app.fetch, port: config.port, hostname })
 
   return {
     close: async (): Promise<void> => {
