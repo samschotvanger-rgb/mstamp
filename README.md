@@ -22,6 +22,16 @@ The wire format is not frozen. `schemaVersion` is `"1"` and the field set is doc
 
 What exists today: the library (RFC 8785 canonicalization, SHA-256 hashing, redaction, response validation, non-mutating `fetch` interception, a fail-open queue, a local SQLite receipt store, and the cloud transport) and the backend (Hono app, ingest, Ed25519 signing, public key publication, tenant-isolated Postgres storage, public verification, and a payload retention job). What does not exist yet: a frozen wire guarantee and an external cryptographic review of the canonicalization and signing path. Treat both halves as work in progress.
 
+### The notary is not running
+
+There is no hosted mstamp service, so there is no endpoint to point `mode: 'cloud'` at. `@mstamp/backend` is source in this repository: it is tested against real Postgres, but it has never been deployed, and no API keys have ever been issued.
+
+That is deliberate. Operating a signer means holding an Ed25519 key whose entire purpose is to be trusted by strangers, plus a database holding their receipt hashes on a retention schedule. A leaked signing key forges receipts that verify against the published public key, so taking custody of one is a permanent security obligation. Taking it on before anyone wants to buy receipts would be a liability, not a feature.
+
+**So, plainly:** the npm package gives you a local audit log and the constraint layer — canonicalization, hashing, redaction, validation — with no third-party attestation. A signed receipt needs a signer that is *not you*, and there isn't one running. A notary you host yourself proves nothing a local receipt doesn't, because you hold the key.
+
+**If you want signed receipts**, [open an issue](https://github.com/samschotvanger-rgb/mstamp/issues) and describe what you need. Standing up the notary is the work that follows, not the work that is done.
+
 ## What mstamp is not
 
 - **Not a proxy.** Traffic is not routed through mstamp. The call the caller makes is the call the provider receives; there is no middlebox to be a single point of failure, a latency tax, or a place where credentials have to land.
