@@ -229,28 +229,36 @@ The backend is a Hono app over Postgres. It signs receipts; it does not compute 
 
 | Variable | Meaning |
 | --- | --- |
-| `DATABASE_URL` | Postgres connection string. Required. |
+| `DATABASE_URL` | What the **service** connects as. Must be `mstamp_app`. Required. |
+| `MIGRATION_DATABASE_URL` | What **migrations and key issuance** connect as: the database owner. Required for those steps; unused by the running service. |
+| `MSTAMP_APP_PASSWORD` | Password for `mstamp_app`, applied by the migrate step. Omitting it leaves the existing password unchanged. |
 | `MSTAMP_SIGNING_KEY` | Base64 of the 32-byte Ed25519 seed. Required. |
 | `MSTAMP_SIGNING_KEY_ID` | Key id published with the public key. Defaults to `k_0001`. |
 | `MSTAMP_MASTER_KEY` | Base64 of the 32-byte payload encryption key. Required in every mode. |
 | `PORT` | Listen port. Defaults to `3000`. |
+| `HOST` | Interface to bind. Defaults to `0.0.0.0`; binding loopback produces a deploy that starts cleanly and never answers. |
 
 **The service refuses to start without them, and there is no fallback key.** It refuses in development too: a dev server that boots without a key and then rejects every receipt teaches the wrong thing about how the service works. A key id already published under a *different* public key is also a hard stop, because overwriting it breaks verification for every receipt already signed under that id while leaving it breaks every future one — neither is recoverable, so the process refuses rather than guessing.
+
+**Two connection strings, and the difference is a security boundary.** Row-level security is bypassed by table owners and superusers, so the service and its migrations need *different* roles: `DATABASE_URL` is the app role, `MIGRATION_DATABASE_URL` is the owner. A deployment carrying only one URL is misconfigured in a way that looks completely healthy — the service runs, every test passes, and tenant isolation does not exist. `docs/deploy.md` is the runbook.
 
 The deployable entry point is `packages/backend/src/serve.ts`, which after `pnpm run build` runs from `packages/backend/dist/serve.js`. It validates configuration, publishes the public key, and only then binds a port, so a receipt can never be signed with a key a verifier cannot yet look up. The test fixture signing key lives in `packages/backend/test/`, never in `src/`: a hard-coded seed in shipped code is a known private key, and deploying with it because it worked locally is a silent, catastrophic failure. Tests inject the key explicitly, so nothing in `src/` needs a test mode.
 
 ### Migrations
 
-Numbered `.sql` files in `packages/backend/migrations/`, applied in filename order by `migrate()` (`src/db/migrate.ts`). There is no ORM, so the schema is the SQL and is reviewable in a diff. Each migration runs in its own transaction — Postgres has transactional DDL, so a failure leaves neither partial schema nor a record of having run — and **applied migrations are checksummed**: editing one that has already run is refused, because the deployed database would never see the change and would silently diverge from a fresh one. Migrations are append-only. There is no migration command in `package.json` yet; the runner is a library function:
+Numbered `.sql` files in `packages/backend/migrations/`, applied in filename order by `migrate()` (`src/db/migrate.ts`). There is no ORM, so the schema is the SQL and is reviewable in a diff. Each migration runs in its own transaction — Postgres has transactional DDL, so a failure leaves neither partial schema nor a record of having run — and **applied migrations are checksummed**: editing one that has already run is refused, because the deployed database would never see the change and would silently diverge from a fresh one. Migrations are append-only.
 
-```ts
-import { Pool } from 'pg'
-import { migrate, poolFromPg } from '@mstamp/backend'
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL })
-const { applied, alreadyApplied } = await migrate(poolFromPg(pool))
-await pool.end()
+```sh
+# from the repository root, after `pnpm run build`
+node packages/backend/dist/bin/migrate.js                    # owner: schema + app-role password
+node packages/backend/dist/bin/issue-key.js --name "Acme"   # owner: prints a new tenant's key once
+node packages/backend/dist/serve.js                         # the service
+node packages/backend/dist/bin/purge.js                     # app role: expired previews
 ```
+
+`migrate` connects as the **owner** (`MIGRATION_DATABASE_URL`), applies any pending files, then sets the app role's password from `MSTAMP_APP_PASSWORD`. `issue-key` stores only the `sha256:` hash of the key it prints, so the key cannot be recovered afterwards — copy it immediately. `purge` connects as the app role and deletes expired payloads through a `SECURITY DEFINER` function, because a plain `DELETE` as that role with no tenant set matches zero rows and would report success while retaining everything. Each command exits non-zero with a specific message when a required variable is missing.
+
+`docs/deploy.md` is the full runbook, including which variable goes where on a host.
 
 ### Row-level security
 
