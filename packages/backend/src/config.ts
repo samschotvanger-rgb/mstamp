@@ -13,10 +13,8 @@
 
 import { MasterKeyError, parseMasterKey } from './crypto/encrypt.js'
 import { SigningKeyError, parseSigningSeed, signingKeyFromSeed, type SigningKey } from './crypto/sign.js'
+import { isKnownTestKey, testKeysAllowed } from './known-test-keys.js'
 import { BACKEND_VERSION } from './version.js'
-
-/** Default key id, per the original spec. */
-export const DEFAULT_KEY_ID = 'k_0001'
 
 export const DEFAULT_PORT = 3000
 
@@ -50,6 +48,49 @@ function parsePort(value: string | undefined): number {
 }
 
 /**
+ * Read the signing key id.
+ *
+ * **No default, deliberately.** A receipt identifies its signing key only by this id -
+ * it carries no issuer or origin field - so two deployments that both call their key
+ * `k_0001` are indistinguishable to a verifier. Since anyone can run this service, a
+ * shared default would make a stranger's receipts and ours formally identical.
+ */
+function parseKeyId(value: string | undefined): string {
+  const keyId = value?.trim()
+  if (keyId === undefined || keyId === '') {
+    throw new Error(
+      'MSTAMP_SIGNING_KEY_ID is required and has no default: a receipt names its signing ' +
+        'key only by this id, so two deployments sharing one cannot be told apart. Pick ' +
+        'something unique to this deployment, e.g. `acme-2026-01`.',
+    )
+  }
+  return keyId
+}
+
+type KeyErrorConstructor = new (message: string) => Error
+
+/**
+ * Refuse a published test fixture.
+ *
+ * A key built from `test/helpers/keys.ts` produces receipts anyone who has read this
+ * repository can forge, and the service would otherwise start happily.
+ */
+function refusePublishedTestKey(
+  bytes: Uint8Array,
+  variable: string,
+  env: ServerEnv,
+  ErrorType: KeyErrorConstructor,
+): void {
+  if (testKeysAllowed(env) || !isKnownTestKey(bytes)) return
+
+  throw new ErrorType(
+    `${variable} is a published test fixture: anyone who has read this repository can ` +
+      'forge with it. Generate a real key with `openssl rand -base64 32`. ' +
+      'MSTAMP_ALLOW_TEST_KEYS=1 overrides this check, and belongs only in tests.',
+  )
+}
+
+/**
  * Read and validate the service configuration.
  *
  * @throws {SigningKeyError} when the signing key is missing, is not base64, or does not
@@ -69,8 +110,11 @@ export async function loadServiceConfig(env: ServerEnv = process.env): Promise<S
     )
   }
 
-  const keyId = env['MSTAMP_SIGNING_KEY_ID']?.trim() || DEFAULT_KEY_ID
-  const signingKey = await signingKeyFromSeed(parseSigningSeed(rawKey), keyId)
+  const seed = parseSigningSeed(rawKey)
+  refusePublishedTestKey(seed, 'MSTAMP_SIGNING_KEY', env, SigningKeyError)
+
+  const keyId = parseKeyId(env['MSTAMP_SIGNING_KEY_ID'])
+  const signingKey = await signingKeyFromSeed(seed, keyId)
 
   const rawMasterKey = env['MSTAMP_MASTER_KEY']?.trim()
   if (rawMasterKey === undefined || rawMasterKey === '') {
@@ -79,6 +123,7 @@ export async function loadServiceConfig(env: ServerEnv = process.env): Promise<S
     )
   }
   const masterKey = parseMasterKey(rawMasterKey)
+  refusePublishedTestKey(masterKey, 'MSTAMP_MASTER_KEY', env, MasterKeyError)
 
   return {
     databaseUrl,

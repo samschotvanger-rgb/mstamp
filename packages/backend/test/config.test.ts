@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from 'vitest'
 
-import { DEFAULT_KEY_ID, DEFAULT_PORT, loadServiceConfig } from '../src/config.js'
+import { DEFAULT_PORT, loadServiceConfig as loadServiceConfigRaw } from '../src/config.js'
 import { MasterKeyError } from '../src/crypto/encrypt.js'
 import { SigningKeyError, publicKeyBase64 } from '../src/crypto/sign.js'
 import {
@@ -21,19 +21,36 @@ import {
 
 const DATABASE_URL = 'postgres://mstamp:secret@localhost:5432/mstamp'
 
+/**
+ * Every test below uses the published fixture keys, which the service refuses by
+ * default. Setting the override once here keeps 24 call sites readable; the guard tests
+ * near the bottom call `loadServiceConfigRaw` to prove the refusal is real.
+ *
+ * A key id is supplied here too, because there is no default any more. Tests that care
+ * about its absence override it with `undefined`.
+ */
+const loadServiceConfig = (
+  env: Record<string, string | undefined>,
+): ReturnType<typeof loadServiceConfigRaw> =>
+  loadServiceConfigRaw({
+    MSTAMP_ALLOW_TEST_KEYS: '1',
+    MSTAMP_SIGNING_KEY_ID: TEST_KEY_ID,
+    ...env,
+  })
+
 describe('loadServiceConfig', () => {
   it('loads a valid configuration', async () => {
     const config = await loadServiceConfig({ DATABASE_URL, MSTAMP_SIGNING_KEY: TEST_SEED_BASE64, MSTAMP_MASTER_KEY: TEST_MASTER_KEY_BASE64 })
 
     expect(config.databaseUrl).toBe(DATABASE_URL)
-    expect(config.signingKey.keyId).toBe(DEFAULT_KEY_ID)
+    expect(config.signingKey.keyId).toBe(TEST_KEY_ID)
     expect(config.port).toBe(DEFAULT_PORT)
     expect(config.signingKey.publicKey).toHaveLength(32)
   })
 
   it('derives the same public key as signingKeyFromSeed', async () => {
     const config = await loadServiceConfig({ DATABASE_URL, MSTAMP_SIGNING_KEY: TEST_SEED_BASE64, MSTAMP_MASTER_KEY: TEST_MASTER_KEY_BASE64 })
-    const expected = await testSigningKey(DEFAULT_KEY_ID)
+    const expected = await testSigningKey(TEST_KEY_ID)
 
     expect(publicKeyBase64(config.signingKey)).toBe(publicKeyBase64(expected))
   })
@@ -107,14 +124,29 @@ describe('loadServiceConfig', () => {
     expect(config.signingKey.keyId).toBe(TEST_KEY_ID)
   })
 
-  it('falls back to the default key id when the override is blank', async () => {
-    const config = await loadServiceConfig({
-      DATABASE_URL,
-      MSTAMP_SIGNING_KEY: TEST_SEED_BASE64, MSTAMP_MASTER_KEY: TEST_MASTER_KEY_BASE64,
-      MSTAMP_SIGNING_KEY_ID: '   ',
-    })
+  it('refuses to start without MSTAMP_SIGNING_KEY_ID', async () => {
+    // No default on purpose: a receipt names its signing key only by this id, so two
+    // deployments sharing one cannot be told apart by a verifier.
+    await expect(
+      loadServiceConfig({
+        DATABASE_URL,
+        MSTAMP_SIGNING_KEY: TEST_SEED_BASE64, MSTAMP_MASTER_KEY: TEST_MASTER_KEY_BASE64,
+        MSTAMP_SIGNING_KEY_ID: undefined,
+      }),
+    ).rejects.toThrow(/MSTAMP_SIGNING_KEY_ID is required/)
+  })
 
-    expect(config.signingKey.keyId).toBe(DEFAULT_KEY_ID)
+  it('refuses a blank MSTAMP_SIGNING_KEY_ID', async () => {
+    for (const value of ['', '   ', '\t']) {
+      await expect(
+        loadServiceConfig({
+          DATABASE_URL,
+          MSTAMP_SIGNING_KEY: TEST_SEED_BASE64, MSTAMP_MASTER_KEY: TEST_MASTER_KEY_BASE64,
+          MSTAMP_SIGNING_KEY_ID: value,
+        }),
+        `value ${JSON.stringify(value)}`,
+      ).rejects.toThrow(/MSTAMP_SIGNING_KEY_ID is required/)
+    }
   })
 
   it('accepts base64url, which operators paste just as often', async () => {
@@ -127,7 +159,7 @@ describe('loadServiceConfig', () => {
 
   it('tolerates surrounding whitespace, which shells and dotenv love to add', async () => {
     const config = await loadServiceConfig({ DATABASE_URL, MSTAMP_SIGNING_KEY: `  ${TEST_SEED_BASE64}\n`, MSTAMP_MASTER_KEY: TEST_MASTER_KEY_BASE64 })
-    const expected = await testSigningKey(DEFAULT_KEY_ID)
+    const expected = await testSigningKey(TEST_KEY_ID)
 
     expect(publicKeyBase64(config.signingKey)).toBe(publicKeyBase64(expected))
   })
@@ -198,5 +230,69 @@ describe('loadServiceConfig', () => {
 
     expect(config.masterKey).toHaveLength(32)
     expect(Array.from(config.masterKey)).toEqual(Array.from(TEST_MASTER_KEY))
+  })
+
+  // -------------------------------------------------------------------------
+  // Refusing the published fixtures
+  //
+  // Anyone can run this service from the repository, so the fixtures that make the
+  // test vectors reproducible are also a forgeable signing key. These tests pin the
+  // guard that stops a deployer copying them out of `test/helpers/keys.ts`.
+  // -------------------------------------------------------------------------
+
+  const REAL_SEED = Buffer.from(new Uint8Array(32).fill(0x2a)).toString('base64')
+  const REAL_MASTER_KEY = Buffer.from(new Uint8Array(32).fill(0x2b)).toString('base64')
+
+  function rawEnv(
+    overrides: Record<string, string | undefined> = {},
+  ): Record<string, string | undefined> {
+    return {
+      DATABASE_URL,
+      MSTAMP_SIGNING_KEY: REAL_SEED,
+      MSTAMP_SIGNING_KEY_ID: TEST_KEY_ID,
+      MSTAMP_MASTER_KEY: REAL_MASTER_KEY,
+      ...overrides,
+    }
+  }
+
+  it('refuses to start with the published test signing key', async () => {
+    await expect(
+      loadServiceConfigRaw(rawEnv({ MSTAMP_SIGNING_KEY: TEST_SEED_BASE64 })),
+    ).rejects.toThrow(/published test fixture/)
+  })
+
+  it('refuses to start with the published test master key', async () => {
+    // A known master key means known per-tenant payload keys, so every stored preview
+    // would be readable by anyone who has read the repository.
+    await expect(
+      loadServiceConfigRaw(rawEnv({ MSTAMP_MASTER_KEY: TEST_MASTER_KEY_BASE64 })),
+    ).rejects.toThrow(/published test fixture/)
+  })
+
+  it('allows the fixtures only behind the exact override', async () => {
+    await expect(
+      loadServiceConfigRaw(
+        rawEnv({
+          MSTAMP_SIGNING_KEY: TEST_SEED_BASE64,
+          MSTAMP_MASTER_KEY: TEST_MASTER_KEY_BASE64,
+          MSTAMP_ALLOW_TEST_KEYS: '1',
+        }),
+      ),
+    ).resolves.toBeDefined()
+
+    // Anything other than exactly "1" leaves the guard in place, so an operator cannot
+    // enable it by half-remembering the value.
+    for (const value of ['true', 'yes', '0', '']) {
+      await expect(
+        loadServiceConfigRaw(
+          rawEnv({ MSTAMP_SIGNING_KEY: TEST_SEED_BASE64, MSTAMP_ALLOW_TEST_KEYS: value }),
+        ),
+        `MSTAMP_ALLOW_TEST_KEYS=${JSON.stringify(value)}`,
+      ).rejects.toThrow(/published test fixture/)
+    }
+  })
+
+  it('does not mistake a real key for a fixture', async () => {
+    await expect(loadServiceConfigRaw(rawEnv())).resolves.toBeDefined()
   })
 })

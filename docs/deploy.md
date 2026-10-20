@@ -47,6 +47,17 @@ against the public key you publish. Neither is recoverable. There is no rotation
 tool yet — `GET /v1/keys` publishes every key ever used precisely so that adding
 a new one never orphans old receipts.
 
+**`MSTAMP_SIGNING_KEY_ID` is required and has no default.** A receipt names its signing
+key only by that id — it carries no issuer field — so two deployments sharing one cannot
+be told apart by a verifier. Pick something unique to this deployment, e.g.
+`acme-2026-01`.
+
+**The published test fixtures are rejected at startup.** `test/helpers/keys.ts` holds 32
+bytes of `0x01` through `0x04` so the pinned digests stay reproducible. A service signing
+with one of those would issue receipts anyone who has read this repository can forge, and
+it would look completely healthy from the inside. `MSTAMP_ALLOW_TEST_KEYS=1` disables the
+check, and belongs only in the test suite.
+
 ## Deploy order
 
 Each step is a compiled entry point, so it works the same on a platform or by hand.

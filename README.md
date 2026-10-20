@@ -233,7 +233,7 @@ The backend is a Hono app over Postgres. It signs receipts; it does not compute 
 | `MIGRATION_DATABASE_URL` | What **migrations and key issuance** connect as: the database owner. Required for those steps; unused by the running service. |
 | `MSTAMP_APP_PASSWORD` | Password for `mstamp_app`, applied by the migrate step. Omitting it leaves the existing password unchanged. |
 | `MSTAMP_SIGNING_KEY` | Base64 of the 32-byte Ed25519 seed. Required. |
-| `MSTAMP_SIGNING_KEY_ID` | Key id published with the public key. Defaults to `k_0001`. |
+| `MSTAMP_SIGNING_KEY_ID` | Key id published with the public key. **Required, no default** — a receipt names its signing key only by this id, so two deployments sharing one are indistinguishable to a verifier. |
 | `MSTAMP_MASTER_KEY` | Base64 of the 32-byte payload encryption key. Required in every mode. |
 | `PORT` | Listen port. Defaults to `3000`. |
 | `HOST` | Interface to bind. Defaults to `0.0.0.0`; binding loopback produces a deploy that starts cleanly and never answers. |
